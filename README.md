@@ -4,13 +4,13 @@ Aplikasi Android pendamping untuk pemilik/admin website **Panelin**. Teruskan no
 
 **Dipasang pada HP pemilik website, bukan HP pelanggan yang melakukan deposit.** Setiap client mengatur aplikasi sumber, URL, dan token sendiri. Tidak ada endpoint bawaan, server perantara Panelin, iklan, atau telemetri terpusat.
 
-Kandidat lokal v1.2.0 menggunakan Jetpack Compose; belum dipublikasikan. Tautan dan screenshot rilis publik di bawah masih v1.0.1.
+v1.2.0 menggunakan Jetpack Compose, dengan komponen interaktif tanpa JavaScript atau WebView. Status rilis tetap **uji terbatas**; Android 15/HP fisik belum terverifikasi.
 
 ## Unduh aplikasi
 
-**[Unduh APK v1.0.1 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.0.1)**
+**[Unduh APK v1.2.0 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.2.0)**
 
-Pada bagian **Assets**, pilih `panelin-notifikasi-1.0.1-release.apk`. File `.sha256` tersedia untuk pemeriksaan integritas. Jangan memilih **Source code** jika hanya ingin memasang aplikasi.
+Pada bagian **Assets**, pilih `panelin-notifikasi-1.2.0-release.apk`. File `.sha256` tersedia untuk pemeriksaan integritas. Jangan memilih **Source code** jika hanya ingin memasang aplikasi.
 
 - Minimum **Android 8.0**; package `id.panelin.notifikasi`.
 - APK ditandatangani dengan sertifikat release tetap, bukan debug key.
@@ -39,7 +39,7 @@ Jika v1.0.0 langsung tertutup saat dibuka pada Android 15, v1.0.1 memperbaiki sa
 1. Unduh APK dari tautan rilis di atas dan izinkan pemasangan dari sumber tersebut bila Android memintanya.
 2. Buka aplikasi dan baca penjelasan privasi. Pada Android tertentu, aplikasi hasil sideload perlu **Allow restricted settings / Izinkan setelan terbatas** di info aplikasi sebelum akses notifikasi dapat diaktifkan. Nama menu tergantung perangkat; aplikasi tidak melewati pembatasan Android.
 3. Di website Panelin Anda, buka metode pembayaran Manual yang mendukung konfirmasi notifikasi. Aktifkan fiturnya, lalu salin URL callback dan token penerima.
-4. Pada tab **Aplikasi**, pilih sumber pembayaran yang benar, tekan **Atur penerusan**, isi URL HTTPS serta token, dan berikan persetujuan. Format URL: `https://DOMAIN-ANDA/callback/notification/ID_METODE`, dengan ID numerik.
+4. Pada tab **Aplikasi**, pilih sumber pembayaran yang benar, tekan **Hubungkan aplikasi** atau **Kelola tujuan**, isi URL HTTPS serta token, dan berikan persetujuan. Format URL: `https://DOMAIN-ANDA/callback/notification/ID_METODE`, dengan ID numerik.
 5. Melalui **Beranda**, berikan akses notifikasi di pengaturan Android, izinkan notifikasi status, dan aktifkan penerusan. Tinjau baterai/autostart sesuai merek HP.
 6. Sebelum penggunaan operasional, ikuti [checklist uji perangkat](TESTING.md). Untuk pembayaran nyata yang disetujui client, cocokkan hasil di Riwayat dengan invoice, mutasi dompet, dan saldo website.
 

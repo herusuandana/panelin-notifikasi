@@ -1,6 +1,6 @@
 # Hasil pengujian
 
-## v1.2.0 — Jetpack Compose (versionCode 4, kandidat uji lokal)
+## v1.2.0 — Jetpack Compose (versionCode 4, uji terbatas)
 
 - Build signed/debug/instrumentation berhasil pada iterasi migrasi; sertifikat sama. Lima unit test lulus; lint 0 error, 23 warning.
 - Runtime API 26 awal: StartupTest (1), ComponentTest (2), RedesignTest (1) lulus. ResponsiveTest gagal karena pencarian item LazyColumn yang belum terkomposisi; tes diperbaiki memakai scroll-to-node dan pengulangan kemudian lulus.

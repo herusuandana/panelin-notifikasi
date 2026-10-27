@@ -4,7 +4,7 @@ APK resmi dan checksum tersedia di [GitHub Releases](https://github.com/herusuan
 
 ## 1.2.0 — 2026-10-27
 
-**versionCode: 4 · Status: kandidat uji lokal — Jetpack Compose**
+**versionCode: 4 · Status: uji terbatas — Jetpack Compose**
 
 - Mengganti UI Android Views manual dengan Jetpack Compose; tanpa JavaScript atau WebView.
 - Empat halaman reaktif, animasi navigasi/toggle, bottom sheet, ikon custom, pencarian aplikasi, dan rail untuk layar lebar.

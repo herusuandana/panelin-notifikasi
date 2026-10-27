@@ -46,6 +46,7 @@ Jalankan dari root repository dengan JDK 17 dan Android SDK 35:
 ```sh
 ./gradlew testDebugUnitTest lintRelease assembleDebug assembleDebugAndroidTest
 python3 scripts/check-release.py
+python3 scripts/check-startup.py
 ```
 
 Untuk artefak bertanda tangan, `python3 scripts/build-release.py assembleDebug assembleDebugAndroidTest` menjalankan unit test, lint, build release, dan verifikasi signature. Ikuti catatan signing pada [README](README.md); jangan mengganti identitas resmi.
@@ -66,6 +67,8 @@ python3 scripts/check-release-ui.py
 
 Hasil per kelas dan screenshot lokal ada di `dist/qa/` (tidak di-commit). Host tanpa KVM dapat mengalami timeout/ANR sistem; periksa screenshot/hierarki dan jangan mengklaim tes yang terhalang telah lulus.
 
+- `StartupTest`: membuka Activity dan memeriksa judul dashboard, tanpa bergantung pada UI Automator atau izin notifikasi. Jalankan juga pada Android 15/API 35 untuk jalur system bar modern.
+- `check-startup.py`: guard urutan inisialisasi source, bukan pengganti tes runtime.
 - `StoreSecurityTest`: SQLite/Keystore nyata dan penolakan URL tidak aman.
 - `QueueBehaviorTest`: pending, pause, hapus riwayat, dan credential-change hold. Bukan simulasi ketahanan offline menyeluruh.
 - `StatusNotificationTest`: status tidak mengaku tersambung tanpa akses listener.

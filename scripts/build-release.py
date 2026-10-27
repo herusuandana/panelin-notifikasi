@@ -11,6 +11,7 @@ import sys
 
 root = Path(__file__).resolve().parents[1]
 subprocess.run([sys.executable, str(root / 'scripts/check-release.py')], check=True)
+subprocess.run([sys.executable, str(root / 'scripts/check-startup.py')], check=True)
 if hasattr(os, 'sched_getaffinity'):
     os.sched_setaffinity(0, sorted(os.sched_getaffinity(0))[-2:])
     os.nice(10)

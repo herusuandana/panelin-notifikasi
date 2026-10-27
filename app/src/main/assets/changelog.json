@@ -1,3 +1,4 @@
 [
+  {"version":"1.0.1","code":2,"date":"2026-10-27","changes":["Memperbaiki urutan inisialisasi window saat membuka aplikasi pada Android 11 ke atas, termasuk Android 15.","Pengaturan system bar dijalankan setelah tampilan window tersedia.","Menambahkan pengujian regresi cold start; pembaruan memakai sertifikat release yang sama."]},
   {"version":"1.0.0","code":1,"date":"2026-10-27","changes":["Rilis perdana untuk pemilik website Panelin.","Pemilihan aplikasi pembayaran terpasang dan tujuan webhook per aplikasi.","Pengiriman langsung ke website client melalui HTTPS.","Antrian lokal terenkripsi dengan pengiriman ulang saat koneksi tersedia.","Riwayat hasil backend: terkirim tidak selalu berarti saldo dikreditkan.","Panduan akses notifikasi, baterai, dan autostart.","Token terlindungi Android Keystore; pencadangan data aplikasi dinonaktifkan."]}
 ]

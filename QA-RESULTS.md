@@ -1,4 +1,22 @@
-# Hasil pengujian v1.0.0
+# Hasil pengujian
+
+## v1.0.1 — perbaikan startup (versionCode 2)
+
+- Memindahkan akses `window.insetsController` setelah `setContentView(root)`. Implementasi Android PhoneWindow mengakses decor secara langsung di dalam getter; safe-call Kotlin tidak melindungi exception dari getter sebelum decor tersedia.
+- Guard `python3 scripts/check-startup.py` gagal pada urutan lama dan lulus setelah perbaikan. Guard ini memeriksa urutan source, bukan runtime Android.
+- Tes instrumentation `StartupTest` ditambahkan untuk membuka Activity dan memeriksa dashboard; APK tes berhasil dikompilasi.
+- Build release/debug/instrumentation berhasil, lima unit test lulus, lint release tanpa error.
+- Sertifikat release tetap sama dengan v1.0.0; versionCode naik dari 1 menjadi 2. APK dapat digunakan sebagai pembaruan tanpa uninstall.
+- Runtime Android 15 **belum terverifikasi**: emulator API 35 software tanpa KVM belum menyelesaikan boot. Log crash HP pelapor belum diterima, sehingga hubungan error spesifik di HP dengan defect startup ini belum dikonfirmasi lewat stack trace.
+- Belum ada perubahan izin, kontrak webhook, atau pengujian pembayaran produksi.
+
+SHA-256 APK v1.0.1:
+
+```text
+7851eb8f552288b0906fa2bdf925b8e02bbdbdcb81059bb5c2bad762de8395c4
+```
+
+## Arsip hasil v1.0.0
 
 Tanggal pengujian: 27 Oktober 2026. Package `id.panelin.notifikasi`, versionCode `1`, minimum Android 8.0/API 26, target SDK 35.
 

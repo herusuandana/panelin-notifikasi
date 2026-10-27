@@ -2,6 +2,15 @@
 
 APK resmi dan checksum tersedia di [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Versi di aplikasi mengikuti `versionName` dan `versionCode`; catatan yang sama tersedia melalui Pengaturan → Yang baru di versi ini.
 
+## 1.0.1 — 2026-10-27
+
+**versionCode: 2 · Status: uji terbatas**
+
+- Memperbaiki akses controller system bar sebelum window decor tersedia saat startup pada Android 11 ke atas, termasuk Android 15.
+- Memindahkan konfigurasi system bar setelah pemasangan content view tanpa mengubah izin atau alur pembayaran.
+- Menambahkan guard urutan startup dan tes cold start Android.
+- Tetap memakai package dan sertifikat release yang sama agar dapat diperbarui tanpa uninstall.
+
 ## 1.0.0 — 2026-10-27
 
 **versionCode: 1 · Status: uji terbatas**

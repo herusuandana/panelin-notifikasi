@@ -6,9 +6,9 @@ Aplikasi Android pendamping untuk pemilik/admin website **Panelin**. Teruskan no
 
 ## Unduh aplikasi
 
-**[Unduh APK v1.0.0 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.0.0)**
+**[Unduh APK v1.0.1 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.0.1)**
 
-Pada bagian **Assets**, pilih `panelin-notifikasi-1.0.0-release.apk`. File `.sha256` tersedia untuk pemeriksaan integritas. Jangan memilih **Source code** jika hanya ingin memasang aplikasi.
+Pada bagian **Assets**, pilih `panelin-notifikasi-1.0.1-release.apk`. File `.sha256` tersedia untuk pemeriksaan integritas. Jangan memilih **Source code** jika hanya ingin memasang aplikasi.
 
 - Minimum **Android 8.0**; package `id.panelin.notifikasi`.
 - APK ditandatangani dengan sertifikat release tetap, bukan debug key.
@@ -19,6 +19,8 @@ Pada bagian **Assets**, pilih `panelin-notifikasi-1.0.0-release.apk`. File `.sha
   <img src="docs/images/beranda.png" width="240" alt="Beranda Panelin Notifikasi dengan penjelasan privasi dan navigasi bawah">
   <img src="docs/images/riwayat.png" width="240" alt="Riwayat pengiriman dengan filter dan keadaan kosong tanpa transaksi contoh">
 </p>
+
+Jika v1.0.0 langsung tertutup saat dibuka pada Android 15, gunakan v1.0.1 yang memperbaiki urutan inisialisasi window. Pasang sebagai pembaruan **tanpa uninstall**; package dan sertifikat tetap sama.
 
 ## Fitur
 

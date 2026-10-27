@@ -1,5 +1,36 @@
 # Hasil pengujian
 
+## v1.2.0 — Jetpack Compose (versionCode 4, kandidat uji lokal)
+
+- Build signed/debug/instrumentation berhasil pada iterasi migrasi; sertifikat sama. Lima unit test lulus; lint 0 error, 23 warning.
+- Runtime API 26 awal: StartupTest (1), ComponentTest (2), RedesignTest (1) lulus. ResponsiveTest gagal karena pencarian item LazyColumn yang belum terkomposisi; tes diperbaiki memakai scroll-to-node dan pengulangan kemudian lulus.
+- Emulator sempat terhalang ANR System UI/Process system. Hasil yang terhalang tidak dinilai lulus. Konfigurasi sisa pengujian lama (640×1136/font 1.6) direset ke 720×1280/font 1.0 sebelum suite.
+- APK final setelah penyesuaian navigasi teks besar berhasil dibangun. Navigasi empat halaman pada APK signed non-debuggable lulus melalui hierarchy aksesibilitas; preview berasal dari APK ini, bukan mockup.
+- APK 1.2.0 berukuran 1.31 MiB (sebelumnya 1.91 MiB); R8 serta resource shrinking aktif. Ukuran APK bukan benchmark pemakaian RAM/CPU.
+- Runtime API 26: Startup 1, Component 2, Redesign 1, Responsive 1, EditorSecurity 1, StoreSecurity 2, QueueBehavior 1, StatusNotification 1, WorkerContract 1 lulus (11 tes pada 9 kelas).
+- StatusNotificationTest awal gagal pada assertion segera setelah cancel; setelah menunggu acknowledgement NotificationManager maksimal 5 detik, tes ulang lulus (2.764 detik). Tidak ada perubahan kode penerusan. ClientSmokeTest tetap gagal setelah pengulangan: `Error while connecting UiAutomation`. Total terakhir 11 tes lulus, 1 gagal/terhalang; suite keseluruhan tidak dinyatakan lulus. Navigasi APK signed diuji terpisah dan lulus.
+- Uji gabungan sebelumnya juga mencatat kegagalan assertion rekreasi Activity dan status; hasil awal tidak diubah menjadi lulus. Rekreasi kini melalui ActivityScenario, dan editor/token/consent lulus. Hasil v1.1.0 tidak berlaku otomatis untuk Compose.
+- SHA-256 APK 1.2.0: `2fa6c9783cca3e28ef0b7b663badf7add3e2d1a583e0d1acb7583b3c57194b70`.
+- Belum ada verifikasi Android 15, HP fisik, virtual autofill structure, serangan overlay, atau pembayaran end-to-end. Tidak ada request ke website client.
+
+## v1.1.0 — desain ulang (versionCode 3, kandidat lokal)
+
+- Build release/debug/instrumentation berhasil; 5 unit test lulus. Lint: 0 error, 27 warning (termasuk custom view yang dibuat programatis dan alokasi gambar ikon).
+- Guard komponen gagal pada Spinner lama lalu lulus setelah penggantian; guard startup tetap lulus.
+- Android 8/API 26: StartupTest, ComponentTest, RedesignTest, ResponsiveTest, StoreSecurityTest (2 tes), QueueBehaviorTest lulus — 7 tes runtime pada 6 kelas.
+- ComponentTest awal menemukan class aksesibilitas kosong pada toggle custom; implementasi diperbaiki dan tes ulang lulus. Checked/checkable semantics serta FLAG_SECURE diverifikasi.
+- Empat tab dan pilihan filter diuji pada debug instrumentation. Pemeriksaan UI Automator awal terhalang ANR System UI/Process system; tidak dinilai lulus. Setelah dialog sistem ditutup, pemeriksaan empat halaman debug berhasil. Label lama skrip “signed release” tidak dipakai sebagai bukti release: skrip kini menolak package DEBUGGABLE.
+- APK signed v1.1.0 terpasang pada emulator API 26; dumpsys menunjukkan versionCode 3 dan tanpa DEBUGGABLE. Judul empat halaman serta scroll hingga Bantuan penyiapan terverifikasi. Screenshot final memperlihatkan aksi terakhir berada di atas navigasi, tidak tertutup.
+- Pengujian resize layar sempit + font 1.6, landscape, dan tablet belum lulus: dump UiAutomator setelah resize tidak menghasilkan hierarki baru, kemudian emulator berhenti. Hasil XML lama tidak digunakan; helper kini menghapus dump lama dan mewajibkan pesan sukses dump. Belum ada bukti keyboard/formulir lengkap di berbagai ukuran atau HP fisik.
+- File backend, worker, listener, penyimpanan, dan kontrak pembayaran tidak diubah. Tidak ada request ke website client.
+- Android 15, HP fisik/OEM, dan pembayaran end-to-end tetap belum terverifikasi. ResponsiveTest memeriksa komponen teks besar/scroll, bukan sertifikasi semua ukuran layar.
+
+SHA-256 APK v1.1.0:
+
+```text
+4a0c997daae63f6fdea9425d3dcc89de415f7ae7b3509af5028e5b7d41ca2c32
+```
+
 ## v1.0.1 — perbaikan startup (versionCode 2)
 
 - Memindahkan akses `window.insetsController` setelah `setContentView(root)`. Implementasi Android PhoneWindow mengakses decor secara langsung di dalam getter; safe-call Kotlin tidak melindungi exception dari getter sebelum decor tersedia.

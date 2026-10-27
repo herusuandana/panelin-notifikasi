@@ -2,6 +2,27 @@
 
 APK resmi dan checksum tersedia di [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Versi di aplikasi mengikuti `versionName` dan `versionCode`; catatan yang sama tersedia melalui Pengaturan → Yang baru di versi ini.
 
+## 1.2.0 — 2026-10-27
+
+**versionCode: 4 · Status: kandidat uji lokal — Jetpack Compose**
+
+- Mengganti UI Android Views manual dengan Jetpack Compose; tanpa JavaScript atau WebView.
+- Empat halaman reaktif, animasi navigasi/toggle, bottom sheet, ikon custom, pencarian aplikasi, dan rail untuk layar lebar.
+- Status penyimpanan gagal ditampilkan sebagai tidak diketahui; operasi simpan dan baca dilakukan di luar thread UI.
+- Token tetap tersembunyi, tidak masuk saved state, autofill dimatikan; sheet sensitif dilindungi FLAG_SECURE.
+- Layanan notifikasi, penyimpanan terenkripsi, antrean, parser, webhook, dan signing tetap sama. Tidak mengirim transaksi uji.
+- Migrasi UI tidak membuktikan crash Android 15 sudah terselesaikan; pengujian HP fisik tetap diperlukan.
+
+## 1.1.0 — 2026-10-27
+
+**versionCode: 3 · Status: kandidat uji lokal**
+
+- Desain ulang Beranda, Riwayat, Aplikasi, dan Pengaturan dengan hierarki, ikon, tipografi, serta navigasi baru.
+- Komponen visual Panelin untuk tombol, input, selector berbentuk sheet, toggle, checkbox, dialog, dan pesan dalam aplikasi; tidak menggunakan chrome kontrol bawaan.
+- Penyesuaian layar sempit, landscape, tablet, teks besar, keyboard, dan area aman sistem.
+- Semantik aksesibilitas kontrol tetap dipertahankan; seluruh dialog dilindungi FLAG_SECURE.
+- Tidak mengubah penyimpanan, antrean, webhook, parser, atau saldo. Izin dan pengaturan milik Android tetap memakai UI sistem.
+
 ## 1.0.1 — 2026-10-27
 
 **versionCode: 2 · Status: uji terbatas**

@@ -4,6 +4,8 @@ Aplikasi Android pendamping untuk pemilik/admin website **Panelin**. Teruskan no
 
 **Dipasang pada HP pemilik website, bukan HP pelanggan yang melakukan deposit.** Setiap client mengatur aplikasi sumber, URL, dan token sendiri. Tidak ada endpoint bawaan, server perantara Panelin, iklan, atau telemetri terpusat.
 
+Kandidat lokal v1.2.0 menggunakan Jetpack Compose; belum dipublikasikan. Tautan dan screenshot rilis publik di bawah masih v1.0.1.
+
 ## Unduh aplikasi
 
 **[Unduh APK v1.0.1 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.0.1)**
@@ -20,7 +22,7 @@ Pada bagian **Assets**, pilih `panelin-notifikasi-1.0.1-release.apk`. File `.sha
   <img src="docs/images/riwayat.png" width="240" alt="Riwayat pengiriman dengan filter dan keadaan kosong tanpa transaksi contoh">
 </p>
 
-Jika v1.0.0 langsung tertutup saat dibuka pada Android 15, gunakan v1.0.1 yang memperbaiki urutan inisialisasi window. Pasang sebagai pembaruan **tanpa uninstall**; package dan sertifikat tetap sama.
+Jika v1.0.0 langsung tertutup saat dibuka pada Android 15, v1.0.1 memperbaiki satu defect urutan inisialisasi window; crash pada HP pelapor belum dikonfirmasi terselesaikan melalui log atau tes perangkat. Pasang sebagai pembaruan **tanpa uninstall**; package dan sertifikat tetap sama.
 
 ## Fitur
 
@@ -62,7 +64,7 @@ Untuk bantuan, hubungi pengelola Panelin Anda atau [buat issue](https://github.c
 
 ## Untuk pengembang
 
-Native Kotlin/Android Views; JDK 17, SDK 35, Build Tools 35.0.0, Gradle Wrapper 8.11.1. Dependensi dan versi build ditetapkan di file Gradle.
+UI Jetpack Compose dengan layanan native Kotlin (tanpa JavaScript atau WebView); JDK 17, SDK 35, Build Tools 35.0.0, Gradle Wrapper 8.11.1. Dependensi dan versi build ditetapkan di file Gradle.
 
 ```sh
 git clone https://github.com/herusuandana/panelin-notifikasi.git

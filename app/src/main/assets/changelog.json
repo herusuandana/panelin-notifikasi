@@ -1,4 +1,49 @@
 [
-  {"version":"1.0.1","code":2,"date":"2026-10-27","changes":["Memperbaiki urutan inisialisasi window saat membuka aplikasi pada Android 11 ke atas, termasuk Android 15.","Pengaturan system bar dijalankan setelah tampilan window tersedia.","Menambahkan pengujian regresi cold start; pembaruan memakai sertifikat release yang sama."]},
-  {"version":"1.0.0","code":1,"date":"2026-10-27","changes":["Rilis perdana untuk pemilik website Panelin.","Pemilihan aplikasi pembayaran terpasang dan tujuan webhook per aplikasi.","Pengiriman langsung ke website client melalui HTTPS.","Antrian lokal terenkripsi dengan pengiriman ulang saat koneksi tersedia.","Riwayat hasil backend: terkirim tidak selalu berarti saldo dikreditkan.","Panduan akses notifikasi, baterai, dan autostart.","Token terlindungi Android Keystore; pencadangan data aplikasi dinonaktifkan."]}
+  {
+    "version": "1.2.0",
+    "code": 4,
+    "date": "2026-10-27",
+    "changes": [
+      "Migrasi seluruh antarmuka ke Jetpack Compose tanpa runtime JavaScript atau WebView.",
+      "Komponen Panelin reaktif, animasi navigasi dan toggle, bottom sheet, pencarian aplikasi, serta layout adaptif.",
+      "Pertahankan layanan notifikasi, enkripsi, antrean, kontrak webhook, dan identitas signing.",
+      "Token tidak disimpan dalam state UI, autofill dinonaktifkan, dan sheet sensitif dilindungi dari tangkapan layar."
+    ]
+  },
+  {
+    "version": "1.1.0",
+    "code": 3,
+    "date": "2026-10-27",
+    "changes": [
+      "Desain ulang seluruh halaman dengan identitas visual Panelin yang baru.",
+      "Komponen custom untuk filter, toggle, checkbox, tombol, input, notifikasi dalam aplikasi, dan dialog berbentuk sheet.",
+      "Tampilan menyesuaikan layar sempit, landscape, tablet, dan ukuran teks besar.",
+      "Dialog sensitif tetap dilindungi dari screenshot; izin Android tetap menggunakan layar sistem.",
+      "Tidak mengubah antrean, tujuan webhook, parser, atau pemrosesan saldo."
+    ]
+  },
+  {
+    "version": "1.0.1",
+    "code": 2,
+    "date": "2026-10-27",
+    "changes": [
+      "Memperbaiki urutan inisialisasi window saat membuka aplikasi pada Android 11 ke atas, termasuk Android 15.",
+      "Pengaturan system bar dijalankan setelah tampilan window tersedia.",
+      "Menambahkan pengujian regresi cold start; pembaruan memakai sertifikat release yang sama."
+    ]
+  },
+  {
+    "version": "1.0.0",
+    "code": 1,
+    "date": "2026-10-27",
+    "changes": [
+      "Rilis perdana untuk pemilik website Panelin.",
+      "Pemilihan aplikasi pembayaran terpasang dan tujuan webhook per aplikasi.",
+      "Pengiriman langsung ke website client melalui HTTPS.",
+      "Antrian lokal terenkripsi dengan pengiriman ulang saat koneksi tersedia.",
+      "Riwayat hasil backend: terkirim tidak selalu berarti saldo dikreditkan.",
+      "Panduan akses notifikasi, baterai, dan autostart.",
+      "Token terlindungi Android Keystore; pencadangan data aplikasi dinonaktifkan."
+    ]
+  }
 ]

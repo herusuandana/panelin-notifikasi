@@ -22,6 +22,11 @@ class StatusNotificationTest {
             store.enabled = false
             Forwarding.refreshStatus(context)
         }
-        assertFalse(manager.activeNotifications.any { it.id == 701 })
+        // NotificationManager.cancel crosses Binder; wait for system-service acknowledgement.
+        val deadline = android.os.SystemClock.elapsedRealtime() + 5_000
+        while (manager.activeNotifications.any { it.id == 701 } && android.os.SystemClock.elapsedRealtime() < deadline) {
+            android.os.SystemClock.sleep(50)
+        }
+        assertFalse("Paused status must disappear after cancellation", manager.activeNotifications.any { it.id == 701 })
     }
 }

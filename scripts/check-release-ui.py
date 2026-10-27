@@ -15,8 +15,13 @@ def run(*arguments):
     return subprocess.run(base + list(arguments), capture_output=True, timeout=45, check=True).stdout
 
 def tree():
-    run('shell', 'uiautomator', 'dump', '/sdcard/release.xml')
+    run('shell', 'rm', '-f', '/sdcard/release.xml')
+    result = run('shell', 'uiautomator', 'dump', '/sdcard/release.xml')
+    assert b'dumped to' in result, result.decode(errors='replace')
     return ET.fromstring(run('shell', 'cat', '/sdcard/release.xml'))
+
+package = run('shell', 'dumpsys', 'package', 'id.panelin.notifikasi').decode()
+assert 'DEBUGGABLE' not in package, 'Install the signed non-debuggable release before this check.'
 
 expected = {'Riwayat': 'Riwayat pengiriman', 'Aplikasi': 'Aplikasi pilihan',
             'Pengaturan': 'Privasi jelas. Kendali tetap di perangkat Anda.', 'Beranda': 'Kendali notifikasi'}

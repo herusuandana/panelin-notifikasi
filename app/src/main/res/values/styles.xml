@@ -1,4 +1,4 @@
 <resources>
 <style name="Theme.Panelin" parent="android:style/Theme.Material.Light.NoActionBar">
-<item name="android:fontFamily">sans</item><item name="android:colorAccent">#2563EB</item><item name="android:windowLightStatusBar">true</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowBackground">#F5F7FA</item><item name="android:windowSoftInputMode">adjustResize</item>
+<item name="android:fontFamily">sans</item><item name="android:colorAccent">#2055E1</item><item name="android:windowLightStatusBar">true</item><item name="android:windowActionModeOverlay">true</item><item name="android:windowBackground">#F5F7FA</item><item name="android:windowSoftInputMode">adjustResize</item>
 </style></resources>

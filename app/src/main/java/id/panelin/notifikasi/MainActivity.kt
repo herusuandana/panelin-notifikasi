@@ -1,751 +1,417 @@
 package id.panelin.notifikasi
 
 import android.Manifest
-import android.app.Activity
-import android.app.AlertDialog
-import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
-import android.content.Context
-import android.graphics.Typeface
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.text.Editable
-import android.text.InputType
-import android.text.TextWatcher
-import android.text.method.PasswordTransformationMethod
-import android.view.Gravity
-import android.view.View
-import android.view.WindowInsets
-import android.view.WindowInsetsController
+import android.net.Uri
 import android.view.WindowManager
-import android.widget.*
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.*
+import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.*
 import org.json.JSONArray
-import java.net.URI
 import java.text.DateFormat
 import java.util.Date
-import java.util.concurrent.Executors
 
-// UI_RULES_START
-internal object UiRules {
-    fun endpointError(value: String): String? {
-        val uri = try { URI(value) } catch (_: Exception) { return "Alamat HTTPS tidak valid." }
-        return if (uri.scheme != "https" || uri.host.isNullOrBlank() || uri.rawUserInfo != null ||
-            uri.rawQuery != null || uri.rawFragment != null || uri.port !in -1..65535 || uri.port == 0 ||
-            !Regex("/callback/notification/[0-9]+").matches(uri.rawPath ?: ""))
-            "Gunakan HTTPS dengan path /callback/notification/ID angka, tanpa kredensial, query, atau fragmen."
-        else null
-    }
-    fun tokenError(value: String): String? = when {
-        value.isBlank() -> "Token wajib diisi."
-        value.length > 100 -> "Token maksimal 100 karakter sesuai penerima Panelin."
-        value.any { it.isWhitespace() || it.isISOControl() } -> "Token tidak boleh berisi spasi atau karakter kontrol."
-        else -> null
-    }
-    fun outcomeLabel(value: String): String = when (value) {
-        "credited" -> "Dikreditkan"
-        "ignored" -> "Diabaikan"
-        "unmatched" -> "Tidak cocok"
-        "ambiguous" -> "Ambigu"
-        "review" -> "Perlu tinjauan"
-        "duplicate" -> "Duplikat"
-        else -> "Belum ada hasil"
-    }
-}
-// UI_RULES_END
+private val Blue = Color(0xFF2457E8)
+private val Ink = Color(0xFF14233D)
+private val Muted = Color(0xFF62718A)
+private val Canvas = Color(0xFFF4F7FC)
+private val Line = Color(0xFFE3EAF4)
+private val Green = Color(0xFF08785C)
+private val Amber = Color(0xFF985519)
+private val Round = RoundedCornerShape(22.dp)
+private data class SourceApp(val pkg: String, val label: String, val icon: android.graphics.Bitmap? = null)
 
-class MainActivity : Activity() {
-    private val ink = Color.rgb(20, 33, 61)
-    private val muted = Color.rgb(100, 116, 139)
-    private val blue = Color.rgb(37, 99, 235)
-    private val background = Color.rgb(245, 247, 250)
-    private val green = Color.rgb(4, 120, 87)
-    private val amber = Color.rgb(146, 64, 14)
-    private val io = Executors.newSingleThreadExecutor()
-    private val handler = Handler(Looper.getMainLooper())
+class MainActivity : ComponentActivity() {
     private lateinit var store: AppStore
-    private lateinit var root: LinearLayout
-    private lateinit var content: LinearLayout
-    private lateinit var scroll: ScrollView
-    private lateinit var navigation: LinearLayout
-    private lateinit var loadStatus: TextView
-    private var tab = 0
-    private var visible = false
-    private var busy = false
-    private var loaded = false
+    private var destinations by mutableStateOf<List<Destination>>(emptyList())
+    private var deliveries by mutableStateOf<List<Delivery>>(emptyList())
+    private var apps by mutableStateOf<List<SourceApp>>(emptyList())
+    private var snapshot by mutableStateOf<Snapshot?>(null)
+    private var enabled by mutableStateOf(false)
+    private var loaded by mutableStateOf(false)
+    private var loadFailed by mutableStateOf(false)
+    private var appsFailed by mutableStateOf(false)
+    private var busy by mutableStateOf(false)
+    private var acknowledged by mutableStateOf(false)
+    private var listener by mutableStateOf(false to false)
+    private var postAllowed by mutableStateOf(false)
+    private var batteryFree by mutableStateOf(false)
+    private var notice by mutableStateOf("")
+    private var editing by mutableStateOf<SourceApp?>(null)
+    private var detail by mutableStateOf<Delivery?>(null)
+    private var info by mutableStateOf<Pair<String,String>?>(null)
+    private var confirmation by mutableStateOf<Pair<String,()->Unit>?>(null)
+    private var privacyAction: (() -> Unit)? = null
+    private var privacyPrompt by mutableStateOf(false)
     private var reading = false
-    private var dialogOpen = false
-    private var privacyAcknowledged = false
-    private var shownListenerState: Pair<Boolean, Boolean>? = null
-    private var masterEnabled = false
-    private var destinations: List<Destination> = emptyList()
-    private var deliveries: List<Delivery> = emptyList()
-    private var stats: Snapshot? = null
-    private var installed: List<InstalledApp> = emptyList()
-    private var appQuery = ""
-    private var historyFilter = 0
-    private var editor: AlertDialog? = null
-    private data class InstalledApp(val packageName: String, val label: String, val icon: Drawable?)
-    private class NavIcon(context: Context, private val index: Int, color: Int) : View(context) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            this.color = color; style = Paint.Style.STROKE; strokeWidth = 1.8f
-            strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
-        }
-        init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            canvas.save()
-            canvas.scale(width / 24f, height / 24f)
-            when (index) {
-                0 -> {
-                    val path = Path().apply { moveTo(3f, 10f); lineTo(12f, 3f); lineTo(21f, 10f); moveTo(5f, 9f); lineTo(5f, 21f); lineTo(10f, 21f); lineTo(10f, 14f); lineTo(14f, 14f); lineTo(14f, 21f); lineTo(19f, 21f); lineTo(19f, 9f) }
-                    canvas.drawPath(path, paint)
-                }
-                1 -> {
-                    canvas.drawCircle(12f, 12f, 8.5f, paint)
-                    canvas.drawLine(12f, 7f, 12f, 12f, paint); canvas.drawLine(12f, 12f, 16f, 14f, paint)
-                }
-                2 -> for (x in listOf(4f, 14f)) for (y in listOf(4f, 14f)) canvas.drawRoundRect(RectF(x, y, x + 6f, y + 6f), 1.5f, 1.5f, paint)
-                3 -> {
-                    for (y in listOf(6f, 12f, 18f)) canvas.drawLine(3f, y, 21f, y, paint)
-                    canvas.drawCircle(8f, 6f, 2f, paint); canvas.drawCircle(16f, 12f, 2f, paint); canvas.drawCircle(9f, 18f, 2f, paint)
-                }
-            }
-            canvas.restore()
-        }
-    }
-    private val refresh = object : Runnable {
-        override fun run() {
-            if (!visible) return
-            if (!dialogOpen && !busy) reload(false)
-            handler.postDelayed(this, 6000)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = AppStore(applicationContext)
-        tab = savedInstanceState?.getInt("tab", 0)?.coerceIn(0, 3) ?: 0
-        appQuery = savedInstanceState?.getString("appQuery") ?: ""
+        enableEdgeToEdge()
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
-        window.statusBarColor = background
-        window.navigationBarColor = Color.WHITE
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(this@MainActivity.background)
-            setOnApplyWindowInsetsListener { view, insets ->
-                if (Build.VERSION.SDK_INT >= 30) {
-                    val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                    val keyboard = insets.getInsets(WindowInsets.Type.ime())
-                    view.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, keyboard.bottom))
-                } else {
-                    @Suppress("DEPRECATION")
-                    view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop,
-                        insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
-                }
-                insets
-            }
-        }
-        setContentView(root)
-        if (Build.VERSION.SDK_INT >= 30) window.insetsController?.setSystemBarsAppearance(
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
-        else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        }
         window.decorView.setFilterTouchesWhenObscured(true)
-        root.requestApplyInsets()
-        header()
-        scroll = ScrollView(this).apply { isFillViewport = true; clipToPadding = false }
-        val frame = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL }
-        content = object : LinearLayout(this) {
-            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-                val width = minOf(View.MeasureSpec.getSize(widthMeasureSpec), dp(720))
-                super.onMeasure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), heightMeasureSpec)
+        window.decorView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+        window.decorView.isSaveEnabled = false
+        window.decorView.isSaveFromParentEnabled = false
+        setContent { PanelTheme { App() } }
+        lifecycleScope.launch { loadApps() }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) { reload(); delay(6000) }
             }
-        }.apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(12), dp(20), dp(24)) }
-        // ponytail: one content column up to 720dp; split panes only if tablet workflows need them.
-        frame.addView(content, LinearLayout.LayoutParams(-1, -2))
-        scroll.addView(frame)
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        navigation = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(8), dp(6), dp(8), dp(6))
-            setBackgroundColor(Color.WHITE)
-            elevation = dp(8).toFloat()
-        }
-        root.addView(navigation, LinearLayout.LayoutParams(-1, -2))
-        render()
-        loadApps()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        visible = true
-        reload(true)
-        handler.removeCallbacks(refresh)
-        handler.postDelayed(refresh, 6000)
-    }
-    override fun onPause() {
-        visible = false
-        handler.removeCallbacks(refresh)
-        super.onPause()
-    }
-    override fun onDestroy() {
-        editor?.dismiss()
-        io.shutdown()
-        handler.removeCallbacksAndMessages(null)
-        super.onDestroy()
-    }
-    override fun onSaveInstanceState(outState: Bundle) {
-        outState.putInt("tab", tab)
-        outState.putString("appQuery", appQuery)
-        super.onSaveInstanceState(outState)
-    }
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 41) {
-            if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED)
-                toast("Izin notifikasi ditolak. Anda dapat mengubahnya melalui pengaturan Android.")
-            reload(true)
         }
     }
-
-    private fun header() {
-        val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(22), dp(16), dp(22), dp(10)) }
-        row.addView(ImageView(this).apply {
-            setImageResource(R.drawable.panelin_logo)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
-        row.addView(column().apply {
-            addView(label("Panelin", 23f, ink, true))
-            addView(label("Notifikasi · v${BuildConfig.VERSION_NAME}", 12f, muted))
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        loadStatus = label("LOKAL", 10f, muted, true).apply {
-            setPadding(dp(10), dp(7), dp(10), dp(7)); background = shape(Color.WHITE, 12)
-            contentDescription = "Data disimpan di perangkat ini"
-        }
-        row.addView(loadStatus)
-        root.addView(row)
+    private suspend fun loadApps() {
+        try {
+            apps = withContext(Dispatchers.IO) {
+                @Suppress("DEPRECATION")
+                packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0)
+                    .filter { it.activityInfo.packageName != packageName }.distinctBy { it.activityInfo.packageName }
+                    .map { SourceApp(it.activityInfo.packageName,it.loadLabel(packageManager).toString(),runCatching { it.loadIcon(packageManager).toBitmap(96,96) }.getOrNull()) }
+                    .sortedBy { it.label.lowercase() }
+            }; appsFailed = false
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { appsFailed = true }
     }
-
-    private fun reload(force: Boolean) {
-        if (reading || busy || isFinishing || isDestroyed) return
+    private suspend fun reload() {
+        if (reading || busy) return
         reading = true
-        io.execute {
-            try {
-                val nextDestinations = store.destinations()
-                val nextDeliveries = store.deliveries(150)
-                val nextStats = store.snapshot()
-                val nextEnabled = store.enabled
-                val acknowledged = getSharedPreferences("ui_privacy", MODE_PRIVATE).getBoolean("acknowledged_v1", false)
-                handler.post {
-                    reading = false
-                    if (isDestroyed || isFinishing) return@post
-                    val changed = !loaded || destinations != nextDestinations || deliveries != nextDeliveries || stats != nextStats || masterEnabled != nextEnabled
-                    destinations = nextDestinations; deliveries = nextDeliveries; stats = nextStats; masterEnabled = nextEnabled; privacyAcknowledged = acknowledged; loaded = true
-                    loadStatus.text = "LOKAL"
-                    val listenerState = Forwarding.listenerEnabled(this) to Forwarding.listenerConnected(this)
-                    if (!dialogOpen && (force || changed || (tab == 0 && listenerState != shownListenerState)) && (tab != 2 || force)) render(true)
-                }
-            } catch (_: Exception) {
-                handler.post {
-                    reading = false
-                    if (!isDestroyed) {
-                        loaded = false
-                        stats = null
-                        loadStatus.text = "GAGAL BACA"
-                        if (!dialogOpen) render(true)
-                        if (force) toast("Data lokal belum dapat dibaca. Coba lagi; data tidak dihapus.")
-                    }
-                }
-            }
-        }
+        try {
+            val result = withContext(Dispatchers.IO) { Triple(store.destinations(),store.deliveries(150),store.snapshot()) }
+            destinations = result.first; deliveries = result.second; snapshot = result.third
+            enabled = store.enabled
+            acknowledged = getSharedPreferences("ui_privacy",MODE_PRIVATE).getBoolean("acknowledged_v1",false)
+            loaded = true; loadFailed = false
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { loaded = false; loadFailed = true; snapshot = null }
+        finally { reading = false }
+        listener = Forwarding.listenerEnabled(this) to Forwarding.listenerConnected(this)
+        postAllowed = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        batteryFree = (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
     }
     private fun mutate(action: () -> Unit, after: () -> Unit = {}) {
-        if (busy) { toast("Sedang menyimpan. Mohon tunggu."); return }
+        if (busy) return
         busy = true
-        loadStatus.text = "MENYIMPAN"
-        io.execute {
-            val success = try { action(); true } catch (_: Exception) { false }
-            handler.post {
-                busy = false
-                if (isDestroyed || isFinishing) return@post
-                loadStatus.text = if (success) "LOKAL" else "GAGAL SIMPAN"
-                if (success) { after(); reload(true) } else {
-                    toast("Perubahan tidak dapat diselesaikan. Muat ulang untuk memeriksa data tersimpan.")
-                    reload(true)
-                }
-            }
+        lifecycleScope.launch {
+            try { withContext(Dispatchers.IO) { action() }; after() }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { notice = "Perubahan belum dapat disimpan. Data tidak dihapus; coba lagi." }
+            finally { busy = false; reload() }
         }
     }
-    private fun render(preserveScroll: Boolean = false) {
-        val oldY = if (preserveScroll) scroll.scrollY else 0
-        content.removeAllViews()
-        navigation.removeAllViews()
-        listOf("Beranda", "Riwayat", "Aplikasi", "Pengaturan").forEachIndexed { index, title ->
-            val item = column().apply {
-                gravity = Gravity.CENTER
-                minimumHeight = dp(58)
-                setPadding(dp(2), dp(5), dp(2), dp(5))
-                background = shape(if (tab == index) Color.rgb(239, 246, 255) else Color.WHITE, 16)
-                isClickable = true; isFocusable = true
-                isSelected = tab == index
-                setOnClickListener { tab = index; render(); hideKeyboard() }
-            }
-            item.addView(NavIcon(this, index, if (tab == index) blue else muted), LinearLayout.LayoutParams(dp(25), dp(25)))
-            item.addView(label(title, 10f, if (tab == index) blue else muted, tab == index).apply {
-                gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-            })
-            navigation.addView(item, LinearLayout.LayoutParams(0, -2, 1f))
-        }
-        when (tab) { 0 -> home(); 1 -> history(); 2 -> applications(); 3 -> settings() }
-        scroll.post { scroll.scrollTo(0, oldY) }
+    private fun openSettings(intent: Intent) {
+        try { startActivity(intent) }
+        catch (_: ActivityNotFoundException) { notice = "Menu tidak tersedia. Buka pengaturan Android secara manual." }
+        catch (_: SecurityException) { notice = "Android membatasi menu ini. Buka Info aplikasi secara manual." }
     }
+    private fun privacyGate(action: () -> Unit) {
+        if (acknowledged) action() else { privacyAction = action; privacyPrompt = true }
+    }
+    private fun acceptPrivacy() = mutate({ check(getSharedPreferences("ui_privacy",MODE_PRIVATE).edit().putBoolean("acknowledged_v1",true).commit()) }) {
+        acknowledged = true; privacyPrompt = false; privacyAction?.invoke(); privacyAction = null
+    }
+    private fun changelog() { lifecycleScope.launch {
+        val text = withContext(Dispatchers.IO) { runCatching {
+            val all = JSONArray(assets.open("changelog.json").bufferedReader().use { it.readText() })
+            (0 until all.length()).joinToString("\n\n") { i -> val row = all.getJSONObject(i); val changes = row.getJSONArray("changes")
+                "${row.getString("version")} (${row.getInt("code")}) · ${row.getString("date")}\n" + (0 until changes.length()).joinToString("\n") { "• ${changes.getString(it)}" }
+            }
+        }.getOrDefault("Catatan perubahan belum tersedia. Versi ${BuildConfig.VERSION_NAME}.") }
+        info = "Catatan perubahan" to text
+    } }
 
-    private fun home() {
-        title("Kendali notifikasi", "Notifikasi pembayaran, langsung ke website Anda.")
-        if (!privacyAcknowledged) card {
-            addView(label("Sebelum memberikan akses", 17f, ink, true))
-            addView(label("Izin akses notifikasi Android dapat membaca notifikasi secara luas. Panelin hanya memproses aplikasi yang Anda pilih dan mengirim paket, judul, teks, serta teks panjang langsung ke website pilihan Anda. Data ini dapat berisi informasi pribadi. Tidak ada tujuan atau token bawaan; membuka aplikasi ini tidak mengirim data.", 14f, muted).withTop(8))
-            addView(action("Baca privasi & batasan", false) { privacy() }.withTop(12))
-            addView(action("Saya mengerti", true) { acknowledgePrivacy {} }.withTop(8))
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable private fun App() {
+        var tab by rememberSaveable { mutableIntStateOf(0) }
+        var query by rememberSaveable { mutableStateOf("") }
+        var filter by rememberSaveable { mutableIntStateOf(0) }
+        var filterOpen by remember { mutableStateOf(false) }
+        val labels = listOf("Beranda","Riwayat","Aplikasi","Pengaturan")
+        val titles = listOf("Kendali notifikasi","Riwayat pengiriman","Aplikasi pilihan","Preferensi perangkat")
+        val subtitles = listOf("Notifikasi pembayaran, langsung ke website Anda.","Aktivitas nyata, tersimpan di perangkat.","Hanya sumber yang Anda setujui yang diteruskan.","Privasi jelas. Kendali tetap di perangkat Anda.")
+        val wide = LocalConfiguration.current.screenWidthDp >= 700 && LocalConfiguration.current.screenHeightDp >= 480
+        val snackbar = remember { SnackbarHostState() }
+        LaunchedEffect(notice) { if(notice.isNotEmpty()) { snackbar.showSnackbar(notice); notice = "" } }
+        val secure = editing != null || detail != null || info != null || privacyPrompt || confirmation != null
+        DisposableEffect(secure) {
+            if(secure) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            onDispose { }
         }
-        val access = Forwarding.listenerEnabled(this)
-        val connected = Forwarding.listenerConnected(this)
-        shownListenerState = access to connected
-        val activeApps = destinations.count { it.enabled }
-        card {
-            val switch = Switch(this@MainActivity).apply {
-                text = "Penerusan notifikasi"; textSize = 17f; setTextColor(ink); minHeight = dp(52)
-                isChecked = masterEnabled; isEnabled = loaded && !busy
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked && !privacyAcknowledged) {
-                        isChecked = false
-                        privacyGate { }
-                    } else if (checked && activeApps == 0) {
-                        isChecked = false
-                        toast("Atur dan aktifkan setidaknya satu aplikasi terlebih dahulu.")
-                        tab = 2; render()
-                    } else if (checked != masterEnabled) {
-                        mutate({ store.enabled = checked; if (checked) { Forwarding.schedule(applicationContext); Forwarding.reconnect(applicationContext) } })
+        Scaffold(containerColor = Canvas, snackbarHost = { SnackbarHost(snackbar) },
+            bottomBar = { if(!wide) Surface(color=Color.White,shadowElevation=8.dp) {
+                val largeText = LocalDensity.current.fontScale > 1.4f
+                Column(Modifier.navigationBarsPadding().padding(horizontal=8.dp,vertical=6.dp)) {
+                    labels.indices.chunked(if(largeText) 2 else 4).forEach { group ->
+                        Row { group.forEach { i -> NavItem(i,labels[i],tab==i,Modifier.weight(1f)) { tab=i } } }
+                    }
+                }
+            } }
+        ) { padding ->
+            Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
+                if(wide) Column(Modifier.width(112.dp).fillMaxHeight().background(Color.White).padding(12.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
+                    Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(42.dp).align(Alignment.CenterHorizontally).padding(6.dp))
+                    labels.forEachIndexed { i,label -> NavItem(i,label,tab==i,Modifier.fillMaxWidth()) { tab=i } }
+                }
+                Column(Modifier.weight(1f)) {
+                    Row(Modifier.fillMaxWidth().background(Color.White).padding(horizontal=22.dp,vertical=14.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Blue.copy(alpha=.07f)).padding(9.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) { Text("Panelin",fontWeight=FontWeight.Bold,fontSize=21.sp,color=Ink); Text("NOTIFICATION HUB",fontSize=9.sp,letterSpacing=1.8.sp,color=Muted) }
+                        Badge(if(busy) "MENYIMPAN" else if(loadFailed) "GAGAL BACA" else "LOKAL",if(loadFailed) Amber else Green)
+                    }
+                    AnimatedContent(targetState=tab,transitionSpec={ fadeIn() togetherWith fadeOut() },label="page",modifier=Modifier.weight(1f)) { page ->
+                        Box(Modifier.fillMaxSize(),contentAlignment=Alignment.TopCenter) {
+                            LazyColumn(Modifier.widthIn(max=760.dp).fillMaxWidth().imePadding(),contentPadding=PaddingValues(20.dp,20.dp,20.dp,32.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+                                item { Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                                    Text(listOf("OVERVIEW","ACTIVITY","CONNECTED APPS","PREFERENCES")[page],color=Blue,fontSize=10.sp,letterSpacing=2.sp,fontWeight=FontWeight.Bold)
+                                    Text(titles[page],fontSize=29.sp,lineHeight=35.sp,fontWeight=FontWeight.Bold,color=Ink,modifier=Modifier.semantics { heading() })
+                                    Text(subtitles[page],color=Muted,fontSize=14.sp)
+                                } }
+                                if(loadFailed) item { PanelCard { Badge("Penyimpanan belum terbaca",Amber); Copy("Status belum dapat dipastikan. Data tidak dihapus."); Action("Coba lagi") { lifecycleScope.launch { reload() } } } }
+                                when(page) {
+                                    0 -> {
+                                        item { val ready=loaded && enabled && listener.first && listener.second && destinations.any { it.enabled }
+                                            Column(Modifier.fillMaxWidth().clip(Round).background(Brush.linearGradient(listOf(Color(0xFF14284F),Color(0xFF2554A6)))).padding(22.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+                                                Text(if(ready) "● PEMANTAUAN SIAP" else "● KENDALI PERANGKAT",color=Color(0xFFC2D7FF),fontSize=10.sp,letterSpacing=1.5.sp)
+                                                Text(when { !loaded -> "Status belum tersedia"; !enabled -> "Penerusan dijeda"; !listener.first -> "Izinkan akses notifikasi"; !listener.second -> "Menunggu listener"; !ready -> "Pilih aplikasi Anda"; else -> "Siap menerima notifikasi" },color=Color.White,fontSize=26.sp,fontWeight=FontWeight.Bold)
+                                                Text("${destinations.count { it.enabled }} aplikasi aktif · ${destinations.size} dikonfigurasi",color=Color(0xFFD0DFFF),fontSize=13.sp)
+                                                ToggleRow("Penerusan notifikasi",enabled,loaded && !busy) { value ->
+                                                    if(value && !acknowledged) privacyGate { }
+                                                    else if(value && destinations.none { it.enabled }) { tab=2; notice="Hubungkan dan aktifkan satu aplikasi terlebih dahulu." }
+                                                    else mutate({ store.enabled=value; if(value) Forwarding.reconnect(applicationContext) })
+                                                }
+                                                Text("Status perangkat, bukan jaminan koneksi server atau saldo masuk.",color=Color(0xFFD0DFFF),fontSize=12.sp)
+                                            }
+                                        }
+                                        if(!acknowledged) item { PanelCard { Section("Privasi, sebelum memulai"); Copy("Akses Android dapat membaca notifikasi secara luas. Hanya sumber terpilih diteruskan langsung ke website Anda. Data dapat berisi informasi pribadi; tidak ada tujuan atau token bawaan."); Action("Baca privasi & batasan",false) { info="Privasi & batasan" to HelpText.Privacy }; Action("Saya mengerti") { acceptPrivacy() } } }
+                                        item { val compact=LocalConfiguration.current.screenWidthDp<360 || LocalDensity.current.fontScale>1.4f
+                                            if(compact) Column(verticalArrangement=Arrangement.spacedBy(12.dp)) { Metric("Diterima hari ini",snapshot?.todayCount); Metric("Kredit tercatat",snapshot?.creditedCount) }
+                                            else Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) { Box(Modifier.weight(1f)) { Metric("Diterima hari ini",snapshot?.todayCount) }; Box(Modifier.weight(1f)) { Metric("Kredit tercatat",snapshot?.creditedCount) } }
+                                        }
+                                        item { PanelCard { Section("Aktivitas perangkat"); KeyValue("Dalam antrean",snapshot?.queuedCount?.toString()?:"—"); KeyValue("Perlu perhatian",snapshot?.attentionCount?.toString()?:"—"); KeyValue("Terakhir diterima",time(snapshot?.lastReceivedAt?:0)); KeyValue("Terakhir dikirim",time(snapshot?.lastSentAt?:0)); Copy("Kredit tercatat berasal dari riwayat, bukan saldo website. HTTP 200 bukan bukti kredit; hanya hasil credited menunjukkan server mengkreditkan saldo.") } }
+                                        item { PanelCard { Section("Persiapan perangkat")
+                                            SettingRow(6,"Akses notifikasi",if(listener.first) "Diizinkan Android" else "Wajib untuk membaca sumber pilihan") { privacyGate { openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+                                            SettingRow(7,"Notifikasi status",if(postAllowed) "Diizinkan" else "Izinkan penanda status aplikasi") { if(Build.VERSION.SDK_INT>=33 && !postAllowed) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),41) else openSettings(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName)) }
+                                            SettingRow(3,"Pengaturan baterai",if(batteryFree) "Dikecualikan dari optimasi" else "Tinjau pembatasan latar belakang") { openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                                            Action("Minta sambung ulang listener",false) { Forwarding.reconnect(applicationContext); notice="Permintaan dikirim ke Android; koneksi belum dijamin." }
+                                        } }
+                                        item { Action("Kelola aplikasi") { tab=2 } }
+                                    }
+                                    1 -> {
+                                        item { Action(listOf("Semua aktivitas","Dalam antrean","Perlu perhatian","Dikreditkan")[filter]+"   ⌄",false,tag="history-filter") { filterOpen=true } }
+                                        val selected=deliveries.filter { when(filter) { 1->queued(it); 2->attention(it); 3->it.outcome=="credited"; else->true } }
+                                        if(selected.isEmpty()) item { Empty("Belum ada aktivitas","Notifikasi sumber aktif akan muncul di sini. Tidak ada webhook percobaan otomatis.",1) }
+                                        items(selected,key={it.id}) { d -> PanelCard { Row(verticalAlignment=Alignment.CenterVertically) { Glyph(1,Blue); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Section(d.appLabel.ifBlank { d.packageName }); Text(time(d.createdAt),color=Muted,fontSize=12.sp) } }; Badge(deliveryLabel(d),if(d.outcome=="credited") Green else if(attention(d)) Amber else Blue); Copy("${d.attempts} percobaan · Isi notifikasi disembunyikan"); Action("Lihat detail",false) { detail=d } } }
+                                        if(deliveries.size>=150) item { Copy("Menampilkan hingga 150 aktivitas terbaru.") }
+                                        item { Action("Muat ulang",false) { lifecycleScope.launch { reload() } } }
+                                    }
+                                    2 -> {
+                                        item { PanelCard { Badge("${destinations.count { it.enabled }} aktif · ${destinations.size} dikonfigurasi",Blue); Copy("Pilih sumber. Atur tujuannya. Anda memegang kendali.") } }
+                                        item { Field(query,{query=it},"Cari aplikasi atau nama paket",tag="app-search") }
+                                        if(appsFailed) item { PanelCard { Copy("Daftar aplikasi belum dapat dibaca."); Action("Coba muat aplikasi",false) { lifecycleScope.launch { loadApps() } } } }
+                                        val merged=(apps+destinations.filter { d->apps.none { it.pkg==d.packageName } }.map { SourceApp(it.packageName,it.label) }).sortedWith(compareByDescending<SourceApp> { a->destinations.any { it.packageName==a.pkg } }.thenBy { it.label.lowercase() }).filter { it.label.contains(query,true)||it.pkg.contains(query,true) }
+                                        if(merged.isEmpty() && !appsFailed) item { Empty("Tidak ada aplikasi ditemukan","Cari nama lain. Android hanya menampilkan aplikasi dengan ikon peluncur yang dapat dilihat.",2) }
+                                        items(merged,key={it.pkg}) { app -> val configured=destinations.find { it.packageName==app.pkg }
+                                            PanelCard { Row(verticalAlignment=Alignment.CenterVertically) { if(app.icon!=null) Image(app.icon.asImageBitmap(),null,Modifier.size(46.dp).clip(RoundedCornerShape(14.dp))) else Glyph(2,Blue,Modifier.size(44.dp)); Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1f)) { Section(app.label); Text(app.pkg,color=Muted,fontSize=11.sp) } }; Badge(if(configured==null) "Belum diatur" else if(configured.enabled) "Aktif" else "Dijeda",if(configured?.enabled==true) Green else Muted); Action(if(configured==null) "Hubungkan aplikasi →" else "Kelola tujuan →",false) { privacyGate { editing=app } } }
+                                        }
+                                    }
+                                    3 -> {
+                                        item { PanelCard { Row(verticalAlignment=Alignment.CenterVertically) { Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(48.dp).padding(6.dp)); Spacer(Modifier.width(12.dp)); Column { Section("Panelin Notifikasi"); Copy("${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · Jetpack Compose") } }; Badge("Langsung ke website Anda",Green); Copy("Tanpa relay pusat. Tanpa telemetri. Kendali tetap di perangkat Anda.") } }
+                                        item { Section("Privasi & penyimpanan") }
+                                        item { PanelCard { SettingRow(6,"Privasi & alur data","Akses, tujuan, dan batas pemrosesan") { info="Privasi & batasan" to HelpText.Privacy }; SettingRow(1,"Hapus riwayat selesai","Antrean tertunda tetap tersimpan",true) { confirmation="Hanya aktivitas terminal di perangkat yang dihapus. Antrean dan catatan website tidak dihapus." to { mutate({store.clearHistory()}) { notice="Riwayat selesai dihapus; antrean tetap disimpan." } } } } }
+                                        item { Section("Perangkat & latar belakang") }
+                                        item { PanelCard { SettingRow(7,"Optimasi baterai",if(batteryFree) "Dikecualikan Android" else "Tinjau pembatasan baterai") { openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }; SettingRow(3,"Autostart & pembatasan vendor","Tidak dapat diverifikasi otomatis") { info="Autostart & pembatasan vendor" to HelpText.Oem }; SettingRow(2,"Info aplikasi di Android","Izin, baterai, dan penyimpanan") { openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:$packageName"))) } } }
+                                        item { Section("Bantuan & pembaruan") }
+                                        item { PanelCard { SettingRow(1,"Yang baru di versi ini","Catatan perubahan aplikasi") { changelog() }; SettingRow(6,"Bantuan penyiapan","Hubungkan sumber ke website Anda") { info="Bantuan penyiapan" to HelpText.Setup } } }
+                                        item { Text("PANELIN / NOTIFICATION HUB",color=Muted,fontSize=10.sp,letterSpacing=1.5.sp,modifier=Modifier.fillMaxWidth().padding(12.dp)) }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
-            addView(switch)
-            val status = when {
-                !loaded -> "Status belum dapat dipastikan"
-                !masterEnabled -> "Dijeda di perangkat ini"
-                !access -> "Akses notifikasi diperlukan"
-                !connected -> "Menunggu listener Android"
-                activeApps == 0 -> "Belum ada aplikasi aktif"
-                else -> "Siap menerima notifikasi"
-            }
-            addView(badge(status, if (loaded && masterEnabled && connected && access && activeApps > 0) green else amber))
-            addView(label("$activeApps aplikasi aktif · ${destinations.size} dikonfigurasi", 13f, muted).withTop(12))
-            addView(label("Status ini menunjukkan listener di ponsel, bukan koneksi atau kesehatan server.", 12f, muted).withTop(8))
         }
-        section("Ringkasan perangkat")
-        val s = stats
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row.addView(metric(s?.todayCount, "Diterima hari ini"), LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(10) })
-        row.addView(metric(s?.creditedCount, "Kredit tercatat"), LinearLayout.LayoutParams(0, -2, 1f))
-        content.addView(row)
-        card {
-            keyValue("Dalam antrean", s?.queuedCount?.toString() ?: "—")
-            keyValue("Perlu perhatian", s?.attentionCount?.toString() ?: "—")
-            keyValue("Terakhir diterima", time(s?.lastReceivedAt ?: 0))
-            keyValue("Terakhir dikirim", time(s?.lastSentAt ?: 0))
-            addView(label("Kredit tercatat dihitung dari riwayat tersimpan, bukan saldo website. HTTP 200 belum tentu saldo masuk; hanya hasil “credited” berarti dikreditkan oleh server.", 12f, muted).withTop(8))
+        if(filterOpen) Sheet("Filter aktivitas",{filterOpen=false}) {
+            listOf("Semua aktivitas","Dalam antrean","Perlu perhatian","Dikreditkan").forEachIndexed { i,value -> Action(value+(if(i==filter) "  ✓" else ""),i==filter) { filter=i;filterOpen=false } }
         }
-        section("Persiapan perangkat")
-        card {
-            checklist("Akses notifikasi", if (access) "Diizinkan oleh Android" else "Wajib agar aplikasi dapat membaca notifikasi pilihan Anda", access) {
-                privacyGate { openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
-            }
-            val post = canPostNotifications()
-            checklist("Notifikasi aplikasi", if (post) "Diizinkan" else "Untuk pemberitahuan status; bukan izin membaca notifikasi", post) { requestPostNotifications() }
-            val exempt = batteryExempt()
-            checklist("Pengaturan baterai", if (exempt) "Dikecualikan dari optimasi Android" else "Optimasi dapat menunda pekerjaan latar belakang", exempt) {
-                openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
-            addView(action("Listener belum terhubung?", false) {
-                Forwarding.reconnect(applicationContext)
-                toast("Permintaan sambung ulang dikirim ke Android; koneksi belum dijamin.")
-                reload(true)
-            })
+        if(privacyPrompt) Sheet("Persetujuan akses notifikasi",{privacyPrompt=false;privacyAction=null}) {
+            Copy("Android memberi akses notifikasi luas. Panelin hanya membaca isi sumber yang dipilih dan aktif, lalu meneruskan paket, judul, teks, dan teks panjang langsung ke website HTTPS Anda. Isinya dapat sensitif. Tidak ada tujuan atau pengiriman uji bawaan. Setiap tujuan memerlukan persetujuan tersendiri.")
+            Action("Saya mengerti",enabled=!busy) { acceptPrivacy() }; Action("Batal",false) { privacyPrompt=false;privacyAction=null }
         }
-        card {
-            addView(label("Mulai dari aplikasi Anda", 16f, ink, true))
-            addView(label("Pilih aplikasi pembayaran, masukkan endpoint dan token milik website Anda, lalu beri persetujuan. Tidak ada server bawaan.", 14f, muted).withTop(6))
-            addView(action("Kelola aplikasi", true) { tab = 2; render() }.withTop(10))
-        }
+        editing?.let { app -> Editor(app,destinations.find { it.packageName==app.pkg }) }
+        detail?.let { d -> Sheet(d.appLabel.ifBlank { "Detail aktivitas" },{detail=null}) {
+            var reveal by remember(d.id) { mutableStateOf(false) }
+            Badge(deliveryLabel(d),Blue); Copy("${d.packageName}\n${time(d.createdAt)}\n${d.attempts} percobaan"); Copy(d.detail)
+            Copy("Duplikat, diabaikan, dan terkirim bukan bukti kredit. Keputusan saldo berada di server.")
+            if(reveal) Text(listOf(d.title,d.text,d.bigText).filter { it.isNotBlank() }.distinct().joinToString("\n\n").ifBlank { "Tidak ada isi." })
+            else Action("Tampilkan isi sensitif di perangkat ini",false) { reveal=true }
+            Action("Tutup") { detail=null }
+        } }
+        info?.let { (title,text) -> Sheet(title,{info=null}) { Text(text,color=Ink,fontSize=14.sp,lineHeight=23.sp); Action("Mengerti") { info=null } } }
+        confirmation?.let { (text,action) -> Sheet("Konfirmasi penghapusan",{if(!busy)confirmation=null}) { Copy(text); Action("Hapus",enabled=!busy) { action();confirmation=null }; Action("Batal",false,enabled=!busy) { confirmation=null } } }
     }
 
-    private fun history() {
-        title("Riwayat pengiriman", "Hasil nyata dari antrean lokal perangkat ini.")
-        val filters = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
-                listOf("Semua aktivitas", "Dalam antrean", "Perlu perhatian", "Dikreditkan"))
-            minimumHeight = dp(48)
-            contentDescription = "Filter riwayat"
-            setSelection(historyFilter)
+    @Composable private fun Editor(app: SourceApp,existing: Destination?) {
+        // Deliberately remember, never rememberSaveable: no endpoint/token/consent in saved state.
+        var endpoint by remember(app.pkg) { mutableStateOf(existing?.endpoint.orEmpty()) }
+        var token by remember(app.pkg) { mutableStateOf(existing?.token.orEmpty()) }
+        var active by remember(app.pkg) { mutableStateOf(existing?.enabled?:true) }
+        var consent by remember(app.pkg) { mutableStateOf(false) }
+        var validation by remember(app.pkg) { mutableStateOf("") }
+        fun valid(): Boolean {
+            val error=UiRules.endpointError(endpoint.trim())?:UiRules.tokenError(token)
+            validation=error?:"Format valid secara lokal. Server dan token belum diuji; tidak ada data dikirim."
+            return error==null
         }
-        content.addView(filters)
-        val list = column()
-        content.addView(list)
-        fun updateList() {
-            list.removeAllViews()
-            val selected = deliveries.filter { when (historyFilter) {
-                1 -> queued(it)
-                2 -> attention(it)
-                3 -> it.outcome == "credited"
-                else -> true
-            } }
-            if (selected.isEmpty()) {
-                list.addView(emptyCard(if (loaded) "Belum ada aktivitas" else "Memuat riwayat", "Notifikasi dari aplikasi aktif akan muncul di sini. Tidak ada pengiriman percobaan otomatis."))
-            } else selected.forEach { item ->
-                list.addView(cardView().apply {
-                    addView(label(item.appLabel.ifBlank { item.packageName }, 16f, ink, true))
-                    addView(label(time(item.createdAt), 12f, muted).withTop(3))
-                    addView(badge(deliveryLabel(item), if (item.outcome == "credited") green else if (attention(item)) amber else blue).withTop(10))
-                    addView(label("Percobaan: ${item.attempts} · Isi notifikasi disembunyikan", 12f, muted).withTop(9))
-                    addView(action("Lihat detail", false) { deliveryDetails(item) })
-                })
-            }
-            if (deliveries.size >= 150) list.addView(label("Menampilkan hingga 150 aktivitas terbaru.", 12f, muted).withTop(10))
-        }
-        filters.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) { historyFilter = position; updateList() }
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-        }
-        updateList()
-        content.addView(action("Muat ulang", false) { reload(true) }.withTop(12))
-    }
-    private fun queued(d: Delivery): Boolean = d.state.lowercase() in setOf("queued", "pending", "retry", "retrying", "sending", "processing")
-    private fun attention(d: Delivery): Boolean = d.state.lowercase() in setOf("attention", "held", "failed", "error") || d.outcome in setOf("review", "ambiguous", "unmatched")
-    private fun deliveryLabel(d: Delivery): String = when {
-        d.state == "held" -> "Ditahan · tujuan berubah"
-        d.outcome in setOf("credited", "ignored", "unmatched", "ambiguous", "review", "duplicate") -> UiRules.outcomeLabel(d.outcome)
-        queued(d) -> "Dalam antrean"
-        attention(d) -> "Perlu perhatian"
-        d.state.lowercase() in setOf("sent", "delivered", "done", "success") -> "Terkirim · hasil belum diketahui"
-        else -> "Tercatat"
-    }
-    private fun deliveryDetails(d: Delivery) {
-        val box = column().apply { setPadding(dp(22), dp(8), dp(22), dp(16)) }
-        box.addView(label("${d.packageName}\n${time(d.createdAt)}\n${deliveryLabel(d)}\n${d.attempts} percobaan", 14f, ink))
-        box.addView(label("Hasil server menentukan pemrosesan saldo. Duplikat, diabaikan, atau terkirim bukan bukti kredit.", 13f, muted).withTop(12))
-        if (d.detail.isNotBlank()) box.addView(label(d.detail, 13f, muted).withTop(10))
-        val reveal = action("Tampilkan isi sensitif di perangkat ini", false) {}
-        reveal.setOnClickListener {
-            reveal.visibility = View.GONE
-            box.addView(label(listOf(d.title, d.text, d.bigText).filter { it.isNotBlank() }.distinct().joinToString("\n\n").ifBlank { "Tidak ada isi." }, 14f, ink).apply { setTextIsSelectable(true) }.withTop(12))
-        }
-        box.addView(reveal.withTop(12))
-        val details = AlertDialog.Builder(this).setTitle(d.appLabel).setView(ScrollView(this).apply { addView(box) }).setPositiveButton("Tutup", null).create()
-        track(details)
-        details.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-    }
-
-    private fun loadApps() {
-        io.execute {
-            val result = try {
-                val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-                @Suppress("DEPRECATION")
-                packageManager.queryIntentActivities(intent, 0)
-                    .filter { it.activityInfo.packageName != packageName }
-                    .distinctBy { it.activityInfo.packageName }
-                    .map { InstalledApp(it.activityInfo.packageName, it.loadLabel(packageManager).toString(), try { it.loadIcon(packageManager) } catch (_: Exception) { null }) }
-                    .sortedBy { it.label.lowercase() }
-            } catch (_: Exception) { emptyList() }
-            handler.post { if (!isDestroyed) { installed = result; if (tab == 2 && !dialogOpen) render(true) } }
-        }
-    }
-    private fun applications() {
-        title("Aplikasi pilihan", "Hanya aplikasi yang Anda setujui yang diteruskan.")
-        content.addView(label("${destinations.count { it.enabled }} aktif · ${destinations.size} dikonfigurasi", 13f, muted))
-        val search = input("Cari nama atau paket aplikasi", appQuery).apply {
-            inputType = InputType.TYPE_CLASS_TEXT
-            contentDescription = "Cari aplikasi terpasang"
-            setSingleLine(true)
-        }
-        content.addView(search.withTop(14))
-        val list = column()
-        content.addView(list)
-        fun updateList(query: String) {
-            list.removeAllViews()
-            val merged = (installed + destinations.filter { d -> installed.none { it.packageName == d.packageName } }.map { InstalledApp(it.packageName, it.label, null) })
-                .sortedWith(compareByDescending<InstalledApp> { a -> destinations.any { it.packageName == a.packageName } }.thenBy { it.label.lowercase() })
-                .filter { it.label.contains(query, true) || it.packageName.contains(query, true) }
-            if (merged.isEmpty()) list.addView(emptyCard("Tidak ada aplikasi ditemukan", "Cari nama lain. Daftar hanya berisi aplikasi dengan ikon peluncur yang dapat dilihat oleh Android."))
-            merged.forEach { app ->
-                val configured = destinations.find { it.packageName == app.packageName }
-                list.addView(cardView().apply {
-                    val row = LinearLayout(this@MainActivity).apply { gravity = Gravity.CENTER_VERTICAL }
-                    row.addView(ImageView(this@MainActivity).apply { setImageDrawable(app.icon); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO },
-                        LinearLayout.LayoutParams(dp(42), dp(42)).apply { marginEnd = dp(12) })
-                    row.addView(column().apply {
-                        addView(label(app.label, 16f, ink, true))
-                        addView(label(app.packageName, 11f, muted).withTop(3))
-                    }, LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(row)
-                    addView(badge(if (configured == null) "Belum diatur" else if (configured.enabled) "Aktif" else "Dijeda", if (configured?.enabled == true) green else muted).withTop(12))
-                    addView(action(if (configured == null) "Atur penerusan" else "Edit tujuan & izin", false) { editDestination(app, configured) })
-                })
-            }
-        }
-        search.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { appQuery = s?.toString() ?: ""; updateList(appQuery) }
-            override fun afterTextChanged(s: Editable?) = Unit
-        })
-        updateList(appQuery)
-    }
-    private fun editDestination(app: InstalledApp, existing: Destination?) {
-        if (!privacyAcknowledged) { privacyGate { editDestination(app, existing) }; return }
-        val box = column().apply { setPadding(dp(22), dp(6), dp(22), dp(18)) }
-        box.addView(label(app.packageName, 12f, muted))
-        box.addView(label("Endpoint HTTPS", 13f, ink, true).withTop(16))
-        val endpoint = input("https://website-anda/callback/notification/ID", existing?.endpoint ?: "").apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setSingleLine(true)
-            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
-        }
-        box.addView(endpoint.withTop(5))
-        box.addView(label("Token milik metode pembayaran", 13f, ink, true).withTop(14))
-        val token = input("Token rahasia", existing?.token ?: "").apply {
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            transformationMethod = PasswordTransformationMethod.getInstance()
-            setSingleLine(true)
-            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
-            isSaveEnabled = false
-        }
-        token.setFilterTouchesWhenObscured(true)
-        box.addView(token.withTop(5))
-        box.addView(label("Token tetap tersembunyi. Ganti seluruh isi untuk mengubahnya. Jangan gunakan token website milik orang lain.", 12f, muted).withTop(6))
-        val enabled = Switch(this).apply { text = "Aktifkan aplikasi ini"; isChecked = existing?.enabled ?: true; minHeight = dp(52); setTextColor(ink) }
-        box.addView(enabled.withTop(8))
-        val consent = CheckBox(this).apply {
-            text = "Saya mengizinkan isi notifikasi aplikasi ini (paket, judul, teks, dan teks panjang) dikirim ke website yang saya isi. Saya berwenang menggunakan tujuan ini."
-            setTextColor(ink); textSize = 13f; minHeight = dp(48)
-            isChecked = false
-        }
-        box.addView(consent.withTop(8))
-        box.addView(label("Tidak ada permintaan uji ke server. Perubahan endpoint atau token menahan antrean lama agar tidak dikirim ke tujuan baru. Menjeda aplikasi tidak menghapus antrean.", 12f, muted).withTop(10))
-        val validation = label("", 13f, amber).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
-        box.addView(validation.withTop(8))
-        val dialog = AlertDialog.Builder(this).setTitle(app.label)
-            .setView(ScrollView(this).apply { addView(box) })
-            .setNegativeButton("Batal", null)
-            .setNeutralButton("Validasi lokal", null)
-            .setPositiveButton("Simpan", null).create()
-        dialog.setOnShowListener {
-            fun validate(): Boolean {
-                val error = UiRules.endpointError(endpoint.text.toString().trim()) ?: UiRules.tokenError(token.text.toString())
-                validation.text = error ?: "Format valid secara lokal. Ketersediaan server dan token belum diuji; tidak ada data dikirim."
-                return error == null
-            }
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { validate() }
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                if (!validate()) return@setOnClickListener
-                if (!consent.isChecked) { validation.text = "Persetujuan diperlukan sebelum menyimpan tujuan ini."; return@setOnClickListener }
-                val value = Destination(app.packageName, app.label, endpoint.text.toString().trim(), token.text.toString(), enabled.isChecked)
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
-                mutate({ store.saveDestination(value); Forwarding.schedule(applicationContext) }) {
-                    token.text.clear(); dialog.dismiss(); toast("Konfigurasi tersimpan di perangkat.")
+        Sheet(app.label,{if(!busy) { token="";editing=null }}) {
+            Badge("TUJUAN PENERUSAN",Blue); Copy(app.pkg)
+            Field(endpoint,{endpoint=it;validation=""},"Endpoint HTTPS",keyboard=KeyboardType.Uri,tag="endpoint")
+            Field(token,{token=it;validation=""},"Token milik metode pembayaran",secret=true,tag="token")
+            Copy("Token tetap tersembunyi. Ganti seluruh isi untuk mengubahnya; jangan bagikan token.")
+            ToggleRow("Aktifkan aplikasi ini",active,!busy) { active=it }
+            CheckRow("Saya mengizinkan paket, judul, teks, dan teks panjang aplikasi ini dikirim ke website yang saya isi. Saya berwenang menggunakan tujuan ini.",consent,!busy) {consent=it}
+            Copy("Perubahan endpoint/token menahan antrean lama, bukan mengalihkannya. Menjeda tidak menghapus antrean. Request yang sudah berjalan tidak dapat ditarik.")
+            AnimatedVisibility(validation.isNotEmpty()) { Text(validation,color=Amber,fontSize=13.sp,modifier=Modifier.semantics { liveRegion=LiveRegionMode.Polite }) }
+            Action("Validasi lokal",false,enabled=!busy) { valid() }
+            Action(if(busy) "Menyimpan…" else "Simpan",enabled=!busy) {
+                if(valid()) {
+                    if(!consent) validation="Persetujuan diperlukan sebelum menyimpan tujuan."
+                    else { val value=Destination(app.pkg,app.label,endpoint.trim(),token,active); mutate({store.saveDestination(value)}) { token="";editing=null;notice="Konfigurasi tersimpan di perangkat." } }
                 }
-                // Keep retry possible if storage fails; mutate itself prevents concurrent writes.
-                handler.postDelayed({ if (dialog.isShowing) dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = true }, 1500)
+            }
+            Action("Batal",false,enabled=!busy) { token="";editing=null }
+            if(existing!=null) Action("Hapus konfigurasi aplikasi",false,enabled=!busy) {
+                confirmation="Notifikasi baru tidak akan diteruskan. Antrean belum terkirim ditahan, bukan dialihkan; pengiriman berjalan tidak dapat ditarik." to {
+                    mutate({store.removeDestination(app.pkg)}) { token="";editing=null }
+                }
             }
         }
-        track(dialog)
-        dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        if (existing != null) {
-            val remove = action("Hapus konfigurasi aplikasi", false) {
-                AlertDialog.Builder(this).setTitle("Hapus tujuan?")
-                    .setMessage("Notifikasi baru dari ${app.label} tidak akan diteruskan. Antrean yang belum dikirim akan ditahan, bukan dialihkan ke tujuan lain. Pengiriman yang sudah berjalan tidak dapat ditarik kembali.")
-                    .setNegativeButton("Batal", null).setPositiveButton("Hapus") { _, _ ->
-                        mutate({ store.removeDestination(app.packageName) }) { token.text.clear(); dialog.dismiss() }
-                    }.show()
-            }
-            box.addView(remove.withTop(10))
-        }
     }
-
-    private fun settings() {
-        title("Pengaturan", "Privasi jelas. Kendali tetap di perangkat Anda.")
-        card {
-            addView(label("Privasi & data", 17f, ink, true))
-            addView(label("Notifikasi aplikasi terpilih dikirim langsung dari ponsel ke endpoint Anda. Tidak ada telemetri terpusat atau server perantara Panelin bawaan.", 14f, muted).withTop(8))
-            addView(action("Pelajari alur & batasan", false) { privacy() })
-            addView(action("Hapus riwayat selesai", false) {
-                track(AlertDialog.Builder(this@MainActivity).setTitle("Hapus riwayat selesai?")
-                    .setMessage("Hanya aktivitas terminal yang dihapus dari perangkat ini. Antrean tertunda tidak dihapus. Ini tidak menghapus catatan atau transaksi di server Anda.")
-                    .setNegativeButton("Batal", null).setPositiveButton("Hapus riwayat") { _, _ -> mutate({ store.clearHistory() }) { toast("Riwayat selesai dihapus; antrean tetap disimpan.") } }.create())
-            })
-        }
-        card {
-            addView(label("Keandalan latar belakang", 17f, ink, true))
-            addView(label("Status baterai Android: ${if (batteryExempt()) "dikecualikan dari optimasi" else "masih dapat dioptimasi"}. Pengaturan autostart dan pembatasan vendor tidak dapat diverifikasi oleh aplikasi ini.", 14f, muted).withTop(8))
-            addView(action("Buka pengaturan baterai", false) { openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) })
-            addView(action("Panduan autostart & OEM", false) { oemHelp() })
-            addView(action("Info aplikasi di Android", false) { openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) })
-        }
-        card {
-            addView(label("Panelin Notifikasi", 17f, ink, true))
-            keyValue("Versi aplikasi", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-            addView(label("Aplikasi pendamping untuk website Panelin Anda. Status listener bukan bukti bahwa endpoint dapat dijangkau.", 13f, muted).withTop(8))
-            addView(action("Yang baru di versi ini", false) { changelog() })
-            addView(action("Bantuan penyiapan", false) { help() })
-        }
-    }
-    private fun privacy() = info("Privasi & batasan", "• Hanya paket aplikasi yang Anda pilih dan aktifkan yang diproses. Izin Android secara teknis memberikan akses notifikasi yang luas; pilih aplikasi dengan hati-hati.\n\n• Paket, judul, teks, dan teks panjang dapat mengandung data sensitif. Tujuan ditentukan sendiri dan wajib HTTPS. Token disimpan terenkripsi oleh penyimpanan aplikasi, tidak ditampilkan dalam riwayat.\n\n• Antrean lokal mempertahankan tujuan dan token awal. Mengganti endpoint atau token, maupun menghapus konfigurasi, menahan antrean yang belum dikirim; tidak mengalihkannya ke tujuan baru. Antrean ditahan tetap disimpan untuk peninjauan, bukan dikirim otomatis.\n\n• Menjeda penerusan menghentikan pemrosesan sesuai kendali layanan; proses yang sudah dikirim tidak dapat ditarik kembali. Cabut token di website jika akses harus segera dihentikan.\n\n• Server menentukan saldo. HTTP 200 bukan jaminan kredit. Fingerprint server dapat menganggap pembayaran dengan akun, paket, judul, dan nominal berulang sebagai duplikat; aplikasi tidak mengubah aturan itu.\n\n• Hapus riwayat hanya menghapus aktivitas selesai di perangkat; data yang telah diterima website mengikuti kebijakan website Anda.")
-    private fun help() = info("Bantuan penyiapan", "1. Pada website Anda, buka metode pembayaran yang menerima notifikasi. Salin endpoint HTTPS /callback/notification/ID angka dan tokennya. Jangan membagikan token.\n\n2. Di tab Aplikasi, pilih aplikasi pembayaran yang benar. Masukkan endpoint dan token, beri persetujuan, lalu simpan. Validasi lokal hanya memeriksa format.\n\n3. Izinkan akses notifikasi melalui pengaturan Android dan aktifkan penerusan di Beranda. Tinjau pembatasan baterai/autostart.\n\n4. Tunggu notifikasi pembayaran nyata. Periksa hasil di Riwayat dan konfirmasi transaksi di website. Membuka aplikasi atau melakukan validasi lokal tidak mengirim webhook percobaan.\n\nFormat preset DANA yang diverifikasi server: paket id.dana, judul Pembayaran Masuk, teks Rp{nominal} diterima DANA Bisnis. Filter lokal menolak OTP, promo, dan transaksi keluar yang jelas; keputusan parsing tetap di server.\n\nJika tidak ada riwayat: cek paket pilihan, sakelar aktif, akses notifikasi, koneksi listener, dan pembatasan vendor. Jika pengiriman gagal: periksa endpoint, token, jaringan, dan konfigurasi website. Jangan membagikan isi notifikasi atau token saat meminta bantuan.")
-    private fun oemHelp() = info("Autostart & pembatasan vendor", "Nama menu berbeda pada setiap versi Android dan vendor. Aplikasi ini tidak dapat memastikan apakah autostart sudah diizinkan.\n\nXiaomi / Redmi / POCO: cari Autostart dan Penghemat baterai aplikasi; pilih tanpa pembatasan bila tersedia.\n\nOPPO / realme / vivo: cari Peluncuran otomatis, Aktivitas latar belakang, atau Manajemen baterai aplikasi.\n\nSamsung: periksa Batas penggunaan latar belakang dan pastikan aplikasi tidak berada di daftar tidur lelap.\n\nPerangkat lain: buka Info aplikasi → Baterai dan izinkan aktivitas latar belakang sesuai kebijakan perangkat.\n\nSetelah memulai ulang ponsel, buka aplikasi dan periksa kembali status listener. Force stop dapat menghentikan pekerjaan sampai aplikasi dibuka lagi. Tidak ada pengaturan yang menjamin pengiriman real-time.")
-    private fun changelog() {
-        io.execute {
-            val text = try {
-                val entries = JSONArray(assets.open("changelog.json").bufferedReader().use { it.readText() })
-                (0 until entries.length()).joinToString("\n\n") { index ->
-                    val entry = entries.getJSONObject(index)
-                    val changes = entry.optJSONArray("changes") ?: JSONArray()
-                    "${entry.optString("version")} (${entry.optInt("code")}) · ${entry.optString("date")}\n" +
-                        (0 until changes.length()).joinToString("\n") { "• ${changes.getString(it)}" }
-                }.ifBlank { "Belum ada catatan perubahan dalam paket ini." }
-            } catch (_: Exception) { "Catatan perubahan lokal belum tersedia dalam paket ini.\nVersi terpasang: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})." }
-            handler.post { if (!isDestroyed && visible) info("Catatan perubahan", text) }
-        }
-    }
-
-    private fun canPostNotifications(): Boolean = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    private fun acknowledgePrivacy(after: () -> Unit) {
-        mutate({
-            check(getSharedPreferences("ui_privacy", MODE_PRIVATE).edit().putBoolean("acknowledged_v1", true).commit())
-        }) { privacyAcknowledged = true; after() }
-    }
-    private fun privacyGate(after: () -> Unit) {
-        if (privacyAcknowledged) { after(); return }
-        track(AlertDialog.Builder(this).setTitle("Persetujuan akses notifikasi")
-            .setMessage("Akses Android dapat membaca semua notifikasi. Panelin memfilter aplikasi pilihan Anda sebelum membaca isinya. Paket, judul, teks, dan teks panjang dari aplikasi aktif diteruskan langsung ke website HTTPS yang Anda tentukan; isinya bisa sensitif. Tidak ada server atau pengiriman uji bawaan. Anda tetap harus menyetujui setiap tujuan. Lanjutkan hanya jika Anda memahami akses ini.")
-            .setNegativeButton("Batal", null).setPositiveButton("Saya mengerti") { dialog, _ ->
-                dialog.dismiss()
-                acknowledgePrivacy(after)
-            }.create())
-    }
-    private fun requestPostNotifications() {
-        if (Build.VERSION.SDK_INT >= 33 && !canPostNotifications()) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 41)
-        else openSettings(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
-    }
-    private fun batteryExempt(): Boolean = (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
-    private fun openSettings(intent: Intent) {
-        try { startActivity(intent) }
-        catch (_: ActivityNotFoundException) { toast("Menu tidak tersedia. Buka pengaturan Android → Aplikasi → Panelin Notifikasi.") }
-        catch (_: SecurityException) { toast("Android membatasi pembukaan menu ini. Buka pengaturan secara manual.") }
-    }
-    private fun track(dialog: AlertDialog) {
-        editor = dialog
-        dialogOpen = true
-        dialog.setCanceledOnTouchOutside(false)
-        dialog.setOnDismissListener {
-            dialogOpen = false
-            editor = null
-            if (visible) reload(true)
-        }
-        dialog.show()
-        dialog.window?.setBackgroundDrawable(shape(Color.WHITE, 22))
-    }
-    private fun info(title: String, text: String) {
-        val body = label(text, 14f, ink).apply { setPadding(dp(22), dp(8), dp(22), dp(20)) }
-        track(AlertDialog.Builder(this).setTitle(title).setView(ScrollView(this).apply { addView(body) }).setPositiveButton("Mengerti", null).create())
-    }
-    private fun title(title: String, subtitle: String) {
-        content.addView(label(title, 27f, ink, true).apply { if (Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true })
-        content.addView(label(subtitle, 14f, muted).withTop(7))
-        content.addView(Space(this), LinearLayout.LayoutParams(1, dp(8)))
-    }
-    private fun section(text: String) { content.addView(label(text, 17f, ink, true).withTop(19)) }
-    private fun metric(value: Int?, title: String): LinearLayout = cardView().apply {
-        addView(label(value?.toString() ?: "—", 31f, blue, true))
-        addView(label(title, 13f, muted).withTop(4))
-    }
-    private fun card(block: LinearLayout.() -> Unit) { content.addView(cardView().apply(block)) }
-    private fun cardView() = column().apply {
-        background = shape(Color.WHITE, 22)
-        setPadding(dp(18), dp(17), dp(18), dp(15))
-        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) }
-    }
-    private fun emptyCard(title: String, description: String): LinearLayout = cardView().apply {
-        addView(label(title, 17f, ink, true))
-        addView(label(description, 14f, muted).withTop(8))
-    }
-    private fun LinearLayout.keyValue(key: String, value: String) {
-        val row = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP; setPadding(0, dp(9), 0, dp(9)) }
-        row.addView(label(key, 13f, muted), LinearLayout.LayoutParams(0, -2, 1f))
-        row.addView(label(value, 13f, ink, true).apply { gravity = Gravity.END }, LinearLayout.LayoutParams(0, -2, 1f))
-        addView(row)
-    }
-    private fun LinearLayout.checklist(title: String, detail: String, okay: Boolean, onClick: () -> Unit) {
-        val row = column().apply {
-            minimumHeight = dp(76); setPadding(0, dp(10), 0, dp(10))
-            isClickable = true; isFocusable = true
-            contentDescription = "$title. $detail. Ketuk untuk membuka pengaturan."
-            addView(label("${if (okay) "✓" else "○"}  $title  ›", 15f, if (okay) green else ink, true))
-            addView(label(detail, 12f, muted).withTop(5))
-            setOnClickListener { onClick() }
-        }
-        addView(row)
-    }
-    private fun label(text: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
-        this.text = text; textSize = size; setTextColor(color)
-        if (bold) setTypeface(Typeface.DEFAULT, Typeface.BOLD)
-        includeFontPadding = true
-    }
-    private fun badge(text: String, color: Int) = label(text, 12f, color, true).apply {
-        setPadding(dp(10), dp(7), dp(10), dp(7))
-        background = shape(Color.argb(18, Color.red(color), Color.green(color), Color.blue(color)), 10)
-        layoutParams = LinearLayout.LayoutParams(-2, -2)
-    }
-    private fun action(title: String, primary: Boolean, onClick: () -> Unit) = Button(this).apply {
-        text = title; textSize = 13f; isAllCaps = false
-        setTextColor(if (primary) Color.WHITE else blue)
-        minHeight = dp(48); minimumHeight = dp(48)
-        setPadding(dp(12), dp(10), dp(12), dp(10))
-        background = shape(if (primary) blue else Color.rgb(239, 246, 255), 13)
-        stateListAnimator = null
-        setOnClickListener { onClick() }
-    }
-    private fun input(hint: String, value: String) = EditText(this).apply {
-        this.hint = hint; setText(value); textSize = 14f; setTextColor(ink); setHintTextColor(muted)
-        setPadding(dp(12), dp(13), dp(12), dp(13)); minHeight = dp(50)
-        background = shape(this@MainActivity.background, 12)
-        importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
-        isSaveEnabled = false
-    }
-    private fun column() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-    private fun shape(color: Int, radius: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
-    private fun <T : View> T.withTop(margin: Int): T = apply {
-        val params = (layoutParams as? LinearLayout.LayoutParams) ?: LinearLayout.LayoutParams(-1, -2)
-        params.topMargin = dp(margin); layoutParams = params
-    }
-    private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
-    private fun time(value: Long): String = if (value <= 0) "Belum ada" else DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(value))
-    private fun toast(text: String) { Toast.makeText(this, text, Toast.LENGTH_LONG).show() }
-    private fun hideKeyboard() { (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0); root.clearFocus() }
 }
+
+@Composable private fun PanelTheme(content: @Composable ()->Unit) {
+    MaterialTheme(colorScheme=lightColorScheme(primary=Blue,onPrimary=Color.White,surface=Color.White,onSurface=Ink,background=Canvas,onBackground=Ink,outline=Line),content=content)
+}
+@Composable internal fun Action(text: String,primary: Boolean=true,enabled: Boolean=true,tag: String="",click: ()->Unit) {
+    val bg by animateColorAsState(if(primary) Blue else Blue.copy(alpha=.07f),label="button")
+    Surface(onClick=click,enabled=enabled,shape=RoundedCornerShape(16.dp),color=if(enabled) bg else Line,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp).semantics { if(tag.isNotEmpty()) contentDescription=tag }) {
+        Text(text,color=if(!enabled) Muted else if(primary) Color.White else Blue,fontWeight=FontWeight.SemiBold,fontSize=14.sp,modifier=Modifier.padding(16.dp),textAlign=androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+@Composable internal fun PanelCard(content: @Composable ColumnScope.()->Unit) {
+    Surface(shape=Round,color=Color.White,border=BorderStroke(1.dp,Line),modifier=Modifier.fillMaxWidth().animateContentSize()) { Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(14.dp),content=content) }
+}
+@Composable private fun Section(text: String) { Text(text,color=Ink,fontSize=17.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.semantics { heading() }) }
+@Composable private fun Copy(text: String) { Text(text,color=Muted,fontSize=13.sp,lineHeight=20.sp) }
+@Composable private fun Badge(text: String,color: Color) { Text(text,color=color,fontSize=11.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.clip(RoundedCornerShape(10.dp)).background(color.copy(alpha=.08f)).padding(10.dp,7.dp)) }
+@Composable private fun Metric(label: String,value: Int?) { PanelCard { Copy(label); Text(value?.toString()?:"—",fontSize=34.sp,color=Ink,fontWeight=FontWeight.Bold); Text(if(label=="Diterima hari ini") "Notifikasi masuk" else "Riwayat tersimpan",fontSize=10.sp,color=Muted) } }
+@Composable private fun KeyValue(key: String,value: String) { Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) { Text(key,color=Muted,fontSize=13.sp,modifier=Modifier.weight(1f)); Text(value,color=Ink,fontSize=13.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f),textAlign=androidx.compose.ui.text.style.TextAlign.End) } }
+@Composable internal fun ToggleRow(title: String,checked: Boolean,enabled: Boolean=true,change: (Boolean)->Unit) {
+    val position by animateFloatAsState(if(checked) 1f else 0f,label="toggle")
+    val color by animateColorAsState(if(checked) Blue else Color(0xFFACB9CE),label="track")
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Canvas).toggleableCompat(checked,enabled,Role.Switch,change).padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+        Text(title,color=if(enabled) Ink else Muted,fontSize=14.sp,fontWeight=FontWeight.Medium,modifier=Modifier.weight(1f))
+        Box(Modifier.size(48.dp,28.dp).clip(RoundedCornerShape(50)).background(if(enabled) color else Line)) {
+            Box(Modifier.padding(4.dp).offset(x=(20*position).dp).size(20.dp).background(Color.White,RoundedCornerShape(50)))
+        }
+    }
+}
+private fun Modifier.toggleableCompat(checked: Boolean,enabled: Boolean,role: Role,change: (Boolean)->Unit): Modifier = this.then(Modifier.toggleable(checked,enabled=enabled,role=role,onValueChange=change))
+@Composable internal fun CheckRow(title: String,checked: Boolean,enabled: Boolean=true,change: (Boolean)->Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Canvas).toggleableCompat(checked,enabled,Role.Checkbox,change).padding(14.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+        Box(Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if(checked) Blue else Color.White).border(1.dp,if(checked) Blue else Muted,RoundedCornerShape(7.dp)),contentAlignment=Alignment.Center) { if(checked) Glyph(8,Color.White,Modifier.size(17.dp)) }
+        Text(title,color=Ink,fontSize=13.sp,lineHeight=20.sp,modifier=Modifier.weight(1f))
+    }
+}
+@Composable private fun Field(value: String,change: (String)->Unit,label: String,secret: Boolean=false,keyboard: KeyboardType=KeyboardType.Text,tag: String="") {
+    OutlinedTextField(value,onValueChange=change,label={Text(label,fontSize=13.sp)},singleLine=true,shape=RoundedCornerShape(16.dp),visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None,keyboardOptions=KeyboardOptions(keyboardType=if(secret) KeyboardType.Password else keyboard,autoCorrectEnabled=false),modifier=Modifier.fillMaxWidth().semantics { if(tag.isNotEmpty()) contentDescription=tag },colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Line,focusedBorderColor=Blue,unfocusedContainerColor=Color.White,focusedContainerColor=Color.White))
+}
+@Composable private fun SettingRow(icon: Int,title: String,detail: String,danger: Boolean=false,click: ()->Unit) {
+    Surface(onClick=click,color=Color.Transparent,shape=RoundedCornerShape(14.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background((if(danger) Amber else Blue).copy(alpha=.07f)),contentAlignment=Alignment.Center) { Glyph(icon,if(danger) Amber else Blue) }
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) { Text(title,color=if(danger) Amber else Ink,fontSize=14.sp,fontWeight=FontWeight.Medium); Copy(detail) }; Glyph(4,Muted,Modifier.size(16.dp))
+        }
+    }
+}
+@Composable private fun Empty(title: String,description: String,icon: Int) { PanelCard { Column(Modifier.fillMaxWidth().padding(vertical=18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(16.dp)) { Box(Modifier.size(58.dp).clip(RoundedCornerShape(18.dp)).background(Blue.copy(alpha=.07f)),contentAlignment=Alignment.Center) { Glyph(icon,Blue) }; Section(title); Text(description,color=Muted,fontSize=13.sp,lineHeight=21.sp,textAlign=androidx.compose.ui.text.style.TextAlign.Center) } } }
+@Composable private fun NavItem(index: Int,title: String,selected: Boolean,modifier: Modifier,click: ()->Unit) {
+    val bg by animateColorAsState(if(selected) Blue.copy(alpha=.08f) else Color.Transparent,label="nav")
+    Column(modifier.clip(RoundedCornerShape(18.dp)).background(bg).selectableCompat(selected,click).padding(8.dp,10.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(5.dp)) { Glyph(index,if(selected) Blue else Muted); Text(title,color=if(selected) Blue else Muted,fontSize=10.sp,fontWeight=if(selected) FontWeight.Bold else FontWeight.Normal) }
+}
+private fun Modifier.selectableCompat(selected: Boolean,click: ()->Unit) = this.then(Modifier.selectable(selected,role=Role.Tab,onClick=click))
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun Sheet(title: String,dismiss: ()->Unit,content: @Composable ColumnScope.()->Unit) {
+    ModalBottomSheet(onDismissRequest=dismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),containerColor=Color.White,sheetMaxWidth=560.dp,properties=ModalBottomSheetProperties(securePolicy=androidx.compose.ui.window.SecureFlagPolicy.SecureOn)) {
+        val view = androidx.compose.ui.platform.LocalView.current
+        DisposableEffect(view) {
+            view.rootView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+            view.rootView.setFilterTouchesWhenObscured(true)
+            view.isSaveEnabled = false
+            onDispose { }
+        }
+        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(22.dp,0.dp,22.dp,28.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically) { Text(title,color=Ink,fontSize=22.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f).semantics { heading() }); TextButton(onClick=dismiss) { Text("Tutup") } }
+            content()
+        }
+    }
+}
+@Composable private fun Glyph(kind: Int,color: Color,modifier: Modifier=Modifier.size(24.dp)) {
+    val vector=remember(kind) { ImageVector.Builder("panelin-$kind",24.dp,24.dp,24f,24f).apply { path(stroke=androidx.compose.ui.graphics.SolidColor(Color.Black),strokeLineWidth=1.8f,strokeLineCap=androidx.compose.ui.graphics.StrokeCap.Round,strokeLineJoin=androidx.compose.ui.graphics.StrokeJoin.Round) {
+        when(kind) {
+            0->{moveTo(3f,10f);lineTo(12f,3f);lineTo(21f,10f);moveTo(5f,9f);lineTo(5f,21f);lineTo(10f,21f);lineTo(10f,14f);lineTo(14f,14f);lineTo(14f,21f);lineTo(19f,21f);lineTo(19f,9f)}
+            1->{moveTo(21f,12f);arcTo(9f,9f,0f,true,true,3f,12f);arcTo(9f,9f,0f,true,true,21f,12f);moveTo(12f,7f);lineTo(12f,12f);lineTo(16f,14f)}
+            2->{for(x in listOf(4f,14f))for(y in listOf(4f,14f)){moveTo(x,y);lineTo(x+6,y);lineTo(x+6,y+6);lineTo(x,y+6);close()}}
+            3->{for(y in listOf(6f,12f,18f)){moveTo(3f,y);lineTo(21f,y)};moveTo(8f,3f);lineTo(8f,9f);moveTo(16f,9f);lineTo(16f,15f);moveTo(9f,15f);lineTo(9f,21f)}
+            4->{moveTo(9f,6f);lineTo(15f,12f);lineTo(9f,18f)}
+            6->{moveTo(12f,2f);lineTo(21f,6f);lineTo(20f,14f);lineTo(12f,22f);lineTo(4f,14f);lineTo(3f,6f);close();moveTo(8f,12f);lineTo(11f,15f);lineTo(16f,9f)}
+            8->{moveTo(4f,12f);lineTo(10f,18f);lineTo(20f,5f)}
+            else->{moveTo(6f,3f);lineTo(18f,3f);lineTo(18f,21f);lineTo(6f,21f);close();moveTo(10f,17f);lineTo(14f,17f)}
+        }
+    } }.build() }
+    Icon(vector,null,modifier,tint=color)
+}
+private fun queued(d: Delivery)=d.state.lowercase() in setOf("queued","pending","retry","retrying","sending","processing")
+private fun attention(d: Delivery)=d.state.lowercase() in setOf("attention","held","failed","error") || d.outcome in setOf("review","ambiguous","unmatched")
+private fun deliveryLabel(d: Delivery)=when { d.state=="held"->"Ditahan · tujuan berubah"; d.outcome in setOf("credited","ignored","unmatched","ambiguous","review","duplicate")->UiRules.outcomeLabel(d.outcome); queued(d)->"Dalam antrean";attention(d)->"Perlu perhatian";d.state in setOf("done","sent","delivered","success")->"Terkirim · hasil belum diketahui";else->"Tercatat" }
+private fun time(value: Long)=if(value<=0) "Belum ada" else DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(value))

@@ -61,6 +61,7 @@ class AppStore(context: Context) {
                 }, SQLiteDatabase.CONFLICT_REPLACE).also { check(it != -1L) }
                 // Never redirect pending payment data to edited credentials. Explicit review is required.
                 if (previous != null && (previous.endpoint != value.endpoint || previous.token != value.token)) {
+                    traceHold(route, "Konfigurasi tujuan berubah. Antrean lama ditahan.")
                     db.execSQL("UPDATE queue SET state='held', detail='Konfigurasi tujuan berubah; antrean lama ditahan' WHERE route=? AND state IN ('queued','sending')", arrayOf(route))
                 }
             }
@@ -72,6 +73,7 @@ class AppStore(context: Context) {
         transaction {
             val route = route(packageName)
             db.delete("destinations", "route=?", arrayOf(route))
+            traceHold(route, "Tujuan dihapus. Antrean ditahan.")
             db.execSQL("UPDATE queue SET state='held', detail='Tujuan dihapus; antrean ditahan' WHERE route=? AND state IN ('queued','sending')", arrayOf(route))
         }
     }
@@ -86,7 +88,10 @@ class AppStore(context: Context) {
             transaction {
                 // Keep dedup tombstones when visible terminal history is cleared.
                 val seen = db.insertWithOnConflict("seen", null, ContentValues().apply { put("event", event) }, SQLiteDatabase.CONFLICT_IGNORE)
-                if (seen == -1L) return@transaction
+                if (seen == -1L) {
+                    recordSkip(packageName, "duplicate", key)
+                    return@transaction
+                }
                 val row = db.insertOrThrow("queue", null, ContentValues().apply {
                 put("event", event)
                 put("route", route(packageName))
@@ -101,6 +106,8 @@ class AppStore(context: Context) {
                 put("sent_at", 0)
                 })
                 inserted = row != -1L
+                addTrace(event, "observed", "Notifikasi terbaca", "Sumber aktif dan format pembayaran sesuai")
+                addTrace(event, "queued", "Masuk antrean", "Menunggu koneksi dan izin pengiriman")
             }
             inserted
         }
@@ -108,8 +115,79 @@ class AppStore(context: Context) {
         return inserted
     }
 
+    internal fun recordSkip(packageName: String, reason: String, key: String) = synchronized(lock) {
+        val destination = selected(packageName) ?: return@synchronized
+        val event = Core.eventIdentity(packageName, key, reason)
+        db.rawQuery("SELECT 1 FROM trace WHERE event=? AND kind='skip' LIMIT 1", arrayOf(event)).use {
+            if (it.moveToFirst()) return@synchronized
+        }
+        addTrace(event, "skip", "Dilewati di HP", Core.skipLabel(reason), packageName, destination.label, reason)
+    }
+
+    private fun traceHold(route: String, detail: String) {
+        db.rawQuery("SELECT event FROM queue WHERE route=? AND state IN ('queued','sending')", arrayOf(route)).use { cursor ->
+            while (cursor.moveToNext()) addTrace(cursor.getString(0), "held", "Antrean ditahan", detail)
+        }
+    }
+
+    private fun addTrace(event: String, kind: String, stage: String, detail: String, pkg: String = "", label: String = "", reason: String = "", time: Long = System.currentTimeMillis()) {
+        val data = JSONObject().put("stage", stage.take(100)).put("detail", detail.take(1200)).put("pkg", pkg.take(200)).put("label", label.take(200)).put("reason", reason.take(40))
+        try {
+            db.insertOrThrow("trace", null, ContentValues().apply {
+                put("event", event); put("kind", kind); put("created", time)
+                put("payload", encrypt(data.toString(), "trace:$event:$time"))
+            })
+            // ponytail: keep the latest 2000 diagnostic steps, never prune payment rows or dedup tombstones.
+            db.execSQL("DELETE FROM trace WHERE id NOT IN (SELECT id FROM trace ORDER BY id DESC LIMIT 2000)")
+        } catch (_: Exception) {
+            // Diagnostics must never turn an acknowledged payment into a retry or roll back its queue row.
+            runCatching { recordCaptureFailure() }
+        }
+    }
+
+    private fun traces(event: String): List<TraceStep> = db.query("trace", null, "event=?", arrayOf(event), null, null, "id ASC").use { cursor ->
+        buildList {
+            while (cursor.moveToNext()) {
+                val time = cursor.long("created")
+                val data = decrypt(cursor.getBlob(cursor.getColumnIndexOrThrow("payload")), "trace:$event:$time")
+                add(TraceStep(time, data.getString("stage"), data.getString("detail")))
+            }
+        }
+    }
+
+    private fun traceSecrets(): List<String>? = try {
+        val secrets = destinations().map { it.token }.toMutableList()
+        db.query("queue", null, null, null, null, null, null).use { cursor ->
+            while (cursor.moveToNext()) secrets.add(payload(cursor).getString("sign"))
+        }
+        secrets
+    } catch (_: Exception) {
+        runCatching { recordCaptureFailure() }
+        null // Fail closed for diagnostics, never interfere with the payment result.
+    }
+
+    internal fun recordAttempt(pending: Pending, attempt: Int, time: Long) = synchronized(lock) {
+        val secrets = traceSecrets()
+        val destination = if (secrets == null) "[tujuan disembunyikan]" else Core.safeDestination(pending.data.optString("endpoint"), secrets)
+        addTrace(pending.event, "attempt", "Percobaan $attempt dimulai", destination + "\nJika proses terputus, hasil pengiriman belum diketahui.", time = time)
+    }
+
+    internal fun recordCancelled(pending: Pending) = synchronized(lock) {
+        addTrace(pending.event, "cancelled", "Dibatalkan sebelum dikirim", "Pemantauan atau tujuan berubah. Tidak ada data dikirim pada percobaan ini.")
+    }
+
+    internal fun recordResponse(pending: Pending, attempt: Int, code: Int?, duration: Long, category: String, status: Boolean?, outcome: String?) = synchronized(lock) {
+        val secrets = traceSecrets()
+        val validated = outcome?.takeIf { value -> value in setOf("credited", "ignored", "unmatched", "ambiguous", "review", "duplicate") && secrets != null && secrets.none { it.isNotEmpty() && value.contains(it, true) } }
+        val detail = "Percobaan $attempt · ${duration.coerceAtLeast(0)} ms\n" +
+            (code?.let { "HTTP $it\n" } ?: "Belum ada kode HTTP\n") + category +
+            (status?.let { "\nstatus: $it" } ?: "") + (validated?.let { "\noutcome: $it" } ?: "")
+        // Only allowlisted fields and fixed categories, never raw response or exception messages.
+        addTrace(pending.event, "response", "Hasil percobaan $attempt", detail)
+    }
+
     fun deliveries(limit: Int = 100): List<Delivery> = synchronized(lock) {
-        db.query("queue", null, null, null, null, null, "id DESC", limit.coerceIn(1, 500).toString()).use { cursor ->
+        db.query("queue", null, null, null, null, null, "CASE WHEN state='done' THEN 1 ELSE 0 END, id DESC", limit.coerceIn(1, 500).toString()).use { cursor ->
             buildList {
                 val failure = preferences.getLong("capture_failure", 0)
                 if (failure > 0) add(Delivery(-1, "", "Panelin Notifikasi", "", "", "", failure, "attention", "", 0, "Penyimpanan notifikasi gagal; periksa ruang penyimpanan dan konfigurasi perangkat"))
@@ -118,9 +196,22 @@ class AppStore(context: Context) {
                     add(Delivery(cursor.long("id"), payload?.optString("pkg").orEmpty(), payload?.optString("label").orEmpty(),
                         payload?.optString("title").orEmpty(), payload?.optString("text").orEmpty(), payload?.optString("bigtext").orEmpty(),
                         cursor.long("created"), if (payload == null) "attention" else cursor.string("state"), cursor.string("outcome"),
-                        cursor.int("attempts"), if (payload == null) "Data terenkripsi tidak dapat dibuka" else cursor.string("detail")))
+                        cursor.int("attempts"), if (payload == null) "Data terenkripsi tidak dapat dibuka" else cursor.string("detail"),
+                        runCatching { traces(cursor.string("event")) }.getOrElse { listOf(TraceStep(cursor.long("created"), "Jejak tidak tersedia", "Catatan terenkripsi tidak dapat dibuka")) }))
                 }
             }
+        }.let { payments ->
+            val skipped = db.query("trace", null, "kind='skip'", null, null, null, "id DESC", limit.coerceIn(1, 500).toString()).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        val time = cursor.long("created")
+                        val event = cursor.string("event")
+                        val data = runCatching { decrypt(cursor.getBlob(cursor.getColumnIndexOrThrow("payload")), "trace:$event:$time") }.getOrNull() ?: continue
+                        add(Delivery(-cursor.long("id") - 1, data.optString("pkg"), data.optString("label"), "", "", "", time, "skipped", data.optString("reason"), 0, data.getString("detail"), listOf(TraceStep(time, "Notifikasi terbaca", "Isi tidak disimpan"), TraceStep(time, "Dilewati di HP", data.getString("detail")))))
+                    }
+                }
+            }
+            (payments + skipped).sortedByDescending { it.createdAt }
         }
     }
 
@@ -139,6 +230,7 @@ class AppStore(context: Context) {
     /** Held/pending records are not history and cannot be accidentally deleted here. */
     fun clearHistory() = synchronized(lock) {
         transaction {
+            db.delete("trace", "kind='skip' OR event IN (SELECT event FROM queue WHERE state IN ('done','attention'))", null)
             db.delete("queue", "state IN ('done','attention')", null)
         }
     }
@@ -149,22 +241,28 @@ class AppStore(context: Context) {
         if (!enabled) return@synchronized null
         var result: Pending? = null
         transaction {
+            db.rawQuery("SELECT event FROM queue WHERE state='sending' AND lease_until<=?", arrayOf(now.toString())).use { cursor ->
+                while (cursor.moveToNext()) addTrace(cursor.getString(0), "recovery", "Percobaan terputus", "Hasil sebelumnya belum diketahui. Antrean dipulihkan.")
+            }
             db.execSQL("UPDATE queue SET state='queued', lease_until=0 WHERE state='sending' AND lease_until<=?", arrayOf(now))
             db.query("queue", null, "state='queued' AND next_at<=?", arrayOf(now.toString()), null, null, "id ASC").use { cursor ->
                 while (cursor.moveToNext()) {
                     val payload = try { payload(cursor) } catch (_: Exception) {
                         finish(cursor.long("id"), "attention", "", "Data terenkripsi tidak dapat dibuka", now)
+                        addTrace(cursor.string("event"), "terminal", "Perlu perhatian", "Data terenkripsi tidak dapat dibuka")
                         continue
                     }
                     val destination = findDestination(payload.getString("pkg"))
                     if (destination == null || destination.endpoint != payload.getString("endpoint") || destination.token != payload.getString("sign")) {
                         finish(cursor.long("id"), "held", "", "Konfigurasi tujuan berbeda; antrean ditahan", now)
+                        addTrace(cursor.string("event"), "held", "Antrean ditahan", "Konfigurasi tujuan berbeda")
                         continue
                     }
                     if (!destination.enabled) continue
                     val id = cursor.long("id")
                     if (cursor.int("attempts") >= 8) {
                         finish(id, "attention", "", "Batas percobaan tercapai; periksa mutasi sebelum mengirim ulang", now)
+                        addTrace(cursor.string("event"), "terminal", "Perlu perhatian", "Batas percobaan tercapai. Hasil sebelumnya belum diketahui. Periksa mutasi.")
                         continue
                     }
                     val attempts = cursor.int("attempts") + 1
@@ -190,11 +288,15 @@ class AppStore(context: Context) {
 
     internal fun complete(pending: Pending, outcome: String, detail: String, now: Long) = synchronized(lock) {
         finish(pending.id, if (outcome in setOf("attention", "review", "ambiguous", "unmatched")) "attention" else "done", outcome, detail, now)
+        addTrace(pending.event, "terminal", "Hasil akhir", detail, time = now)
     }
 
     internal fun retry(pending: Pending, next: Long, detail: String) = synchronized(lock) {
         // A concurrent edit may have held this record: do not undo that decision.
-        db.execSQL("UPDATE queue SET state='queued', next_at=?, lease_until=0, detail=? WHERE id=? AND state='sending'", arrayOf(next, detail, pending.id))
+        val changed = db.update("queue", ContentValues().apply {
+            put("state", "queued"); put("next_at", next); put("lease_until", 0); put("detail", detail)
+        }, "id=? AND state='sending'", arrayOf(pending.id.toString()))
+        if (changed > 0) addTrace(pending.event, "retry", "Dijadwalkan ulang", detail + "\nWaktu berikutnya: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(next)))
     }
 
     internal fun nextDue(): Long? = synchronized(lock) {
@@ -241,7 +343,7 @@ class AppStore(context: Context) {
         private val lock = Any()
         private var helper: SQLiteOpenHelper? = null
         private fun database(context: Context): SQLiteOpenHelper = synchronized(lock) {
-            helper ?: object : SQLiteOpenHelper(context, "panelin-secure.db", null, 1) {
+            helper ?: object : SQLiteOpenHelper(context, "panelin-secure.db", null, 2) {
                 override fun onConfigure(db: SQLiteDatabase) {
                     db.rawQuery("PRAGMA secure_delete=ON", null).use { check(it.moveToFirst() && it.getInt(0) == 1) }
                 }
@@ -250,8 +352,15 @@ class AppStore(context: Context) {
                     db.execSQL("CREATE TABLE seen(event TEXT PRIMARY KEY)")
                     db.execSQL("CREATE TABLE queue(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT UNIQUE NOT NULL, route TEXT NOT NULL, payload BLOB NOT NULL, created INTEGER NOT NULL, state TEXT NOT NULL, outcome TEXT NOT NULL, attempts INTEGER NOT NULL, detail TEXT NOT NULL, next_at INTEGER NOT NULL, lease_until INTEGER NOT NULL, sent_at INTEGER NOT NULL)")
                     db.execSQL("CREATE INDEX queue_due ON queue(state,next_at)")
+                    createTrace(db)
                 }
-                override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) { error("Migrasi basis data diperlukan") }
+                override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+                    if (oldVersion < 2) createTrace(db)
+                }
+                private fun createTrace(db: SQLiteDatabase) {
+                    db.execSQL("CREATE TABLE trace(id INTEGER PRIMARY KEY AUTOINCREMENT, event TEXT NOT NULL, kind TEXT NOT NULL, created INTEGER NOT NULL, payload BLOB NOT NULL)")
+                    db.execSQL("CREATE INDEX trace_event ON trace(event,id)")
+                }
             }.also { helper = it }
         }
         private fun key(): SecretKey {

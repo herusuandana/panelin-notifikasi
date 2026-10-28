@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 root = Path(__file__).resolve().parents[1]
 adb = Path.home() / '.local/share/panelin-android-toolchain/android-sdk/platform-tools/adb'
 base = [str(adb), '-s', 'emulator-5580']
-output = root / 'dist/qa'
+output = root / 'dist/qa' / ('trace-' + (root / 'VERSION').read_text().strip()) / 'release'
 output.mkdir(parents=True, exist_ok=True)
 
 def run(*arguments):
@@ -22,9 +22,12 @@ def tree():
 
 package = run('shell', 'dumpsys', 'package', 'id.panelin.notifikasi').decode()
 assert 'DEBUGGABLE' not in package, 'Install the signed non-debuggable release before this check.'
+version = (root / 'VERSION').read_text().strip()
+assert f'versionName={version}' in package, 'Installed release does not match current source version.'
+run('shell', 'am', 'start', '-W', '-n', 'id.panelin.notifikasi/.MainActivity')
 
-expected = {'Riwayat': 'Riwayat pengiriman', 'Aplikasi': 'Aplikasi pilihan',
-            'Pengaturan': 'Privasi jelas. Kendali tetap di perangkat Anda.', 'Beranda': 'Kendali notifikasi'}
+expected = {'Riwayat': 'Riwayat pengiriman', 'Aplikasi': 'Aplikasi terhubung',
+            'Pengaturan': 'Izin perangkat, privasi, dan bantuan.', 'Beranda': 'Notifikasi pembayaran'}
 for tab, heading in expected.items():
     nodes = [node for node in tree().iter('node') if node.attrib.get('text') == tab]
     assert nodes, f'Missing navigation: {tab}'

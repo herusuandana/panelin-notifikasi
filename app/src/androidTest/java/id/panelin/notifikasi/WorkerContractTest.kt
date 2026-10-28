@@ -34,7 +34,7 @@ class WorkerContractTest {
                         override fun getServerCertificates(): Array<Certificate> = emptyArray()
                         override fun getOutputStream() = output
                         override fun getResponseCode() = 200
-                        override fun getInputStream() = ByteArrayInputStream("{\"status\":true,\"outcome\":\"credited\"}".toByteArray())
+                        override fun getInputStream() = ByteArrayInputStream("{\"status\":true,\"outcome\":\"credited\",\"sign\":\"fixture-token\",\"message\":\"OTP 123456\"}".toByteArray())
                     }.also { request = it }
                 }
             }
@@ -43,6 +43,10 @@ class WorkerContractTest {
         val pkg = "id.panelin.workerfixture"
         try {
             store.saveDestination(Destination(pkg, "Worker fixture", "https://fixture.invalid/callback/notification/7", "fixture-token", true))
+            // An unrelated damaged credential must not suppress or replace a confirmed result.
+            android.database.sqlite.SQLiteDatabase.openDatabase(context.getDatabasePath("panelin-secure.db").path,null,android.database.sqlite.SQLiteDatabase.OPEN_READWRITE).use { db ->
+                db.execSQL("INSERT INTO destinations(route,payload) VALUES ('unrelated-corrupt',X'010203')")
+            }
             store.enabled = true
             assertTrue(store.enqueue(pkg, "Worker fixture", "Pembayaran Masuk", "Rp1.457 diterima DANA Bisnis.", "", "worker-event"))
             WorkManager.getInstance(context).enqueue(OneTimeWorkRequestBuilder<DeliveryWorker>().build()).result.get()
@@ -60,7 +64,13 @@ class WorkerContractTest {
             assertEquals("Rp1.457 diterima DANA Bisnis.", json.getString("text"))
             assertEquals("POST", request!!.requestMethod)
             assertFalse(request!!.instanceFollowRedirects)
-            assertTrue(store.deliveries().single { it.packageName == pkg }.state == "done")
+            val delivery = store.deliveries().single { it.packageName == pkg && it.state != "skipped" }
+            assertTrue(delivery.state == "done")
+            assertTrue(delivery.trace.any { it.detail.contains("HTTP 200") })
+            assertTrue(delivery.trace.any { it.stage.startsWith("Percobaan 1 dimulai") })
+            assertFalse(delivery.trace.toString().contains("outcome: credited"))
+            assertFalse(delivery.trace.toString().contains("fixture-token"))
+            assertFalse(delivery.trace.toString().contains("123456"))
         } finally {
             store.enabled = false
             store.removeDestination(pkg)

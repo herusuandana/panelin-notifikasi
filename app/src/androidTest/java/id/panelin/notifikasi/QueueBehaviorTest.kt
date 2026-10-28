@@ -10,9 +10,7 @@ import org.junit.runner.RunWith
 class QueueBehaviorTest {
     @Test fun pausedQueueSurvivesHistoryClearAndCredentialChangeIsHeld() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val device = androidx.test.uiautomator.UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-        device.executeShellCommand("svc wifi disable")
-        device.executeShellCommand("svc data disable")
+        assertFalse("Run this fixture with emulator networking disabled", context.getSystemService(android.net.ConnectivityManager::class.java).activeNetworkInfo?.isConnected == true)
         val store = AppStore(context)
         val pkg = "id.panelin.queuefixture"
         val old = Destination(pkg, "Queue fixture", "https://client.example/callback/notification/1", "fixture-token", false)

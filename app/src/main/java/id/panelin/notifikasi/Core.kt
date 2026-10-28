@@ -7,11 +7,34 @@ object Core {
     private val sensitive = Regex("(?iu)\\b(gagal|dibatalkan|ditolak|failed|cancelled|canceled|rejected|otp|pin|password|passcode|verification|verifikasi|autentikasi|authentication|promo|promosi|diskon|cashback|voucher|login|log\\s*in)\\b|kode.{0,24}(rahasia|keamanan|masuk)|jangan\\s+bagikan|one[- ]time|transfer\\s+berhasil|pembayaran\\s+berhasil|berhasil\\s+(dikirim|transfer|membayar)|uang\\s+keluar")
     private val incoming = Regex("(?iu)diterima|menerima|pembayaran\\s+masuk|transfer\\s+masuk|dana\\s+masuk|uang\\s+masuk|payment\\s+received|received\\s+(a\\s+)?payment|incoming\\s+(payment|transfer)|credited")
 
-    fun shouldForward(title: String, text: String, bigText: String): Boolean {
-        if (title.isBlank() || title.length > 200 || text.length > 4000 || bigText.length > 4000) return false
+    fun skipReason(title: String, text: String, bigText: String): String? {
+        if (title.isBlank() || title.length > 200 || text.length > 4000 || bigText.length > 4000) return "invalid"
         val content = "$title\n$text\n$bigText"
-        return !sensitive.containsMatchIn(content) && incoming.containsMatchIn(content)
+        if (sensitive.containsMatchIn(content)) {
+            return when {
+                Regex("(?iu)\\b(otp|pin|password|passcode|verification|verifikasi|autentikasi|authentication|login)\\b|kode|jangan\\s+bagikan|one[- ]time").containsMatchIn(content) -> "sensitive"
+                Regex("(?iu)\\b(promo|promosi|diskon|cashback|voucher)\\b").containsMatchIn(content) -> "promotion"
+                else -> "outgoing"
+            }
+        }
+        return if (incoming.containsMatchIn(content)) null else "not_payment"
     }
+
+    fun shouldForward(title: String, text: String, bigText: String): Boolean = skipReason(title, text, bigText) == null
+
+    fun skipLabel(reason: String): String = when (reason) {
+        "promotion" -> "Promosi atau penawaran"
+        "sensitive" -> "Data sensitif. Isi tidak disimpan."
+        "outgoing" -> "Transaksi keluar, gagal, atau dibatalkan"
+        "group" -> "Ringkasan grup. Menunggu notifikasi individual."
+        "duplicate" -> "Notifikasi yang sama sudah diproses"
+        "invalid" -> "Format notifikasi tidak didukung"
+        else -> "Bukan notifikasi pembayaran masuk"
+    }
+
+    fun safeDestination(value: String, secrets: List<String>): String =
+        if (validEndpoint(value) && secrets.none { it.isNotEmpty() && value.contains(it, ignoreCase = true) }) value
+        else "[tujuan disembunyikan]"
 
     fun eventIdentity(vararg fields: String): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
@@ -49,5 +72,6 @@ object Core {
 }
 
 data class Destination(val packageName: String, val label: String, val endpoint: String, val token: String, val enabled: Boolean = true)
-data class Delivery(val id: Long, val packageName: String, val appLabel: String, val title: String, val text: String, val bigText: String, val createdAt: Long, val state: String, val outcome: String, val attempts: Int, val detail: String)
+data class TraceStep(val time: Long, val stage: String, val detail: String)
+data class Delivery(val id: Long, val packageName: String, val appLabel: String, val title: String, val text: String, val bigText: String, val createdAt: Long, val state: String, val outcome: String, val attempts: Int, val detail: String, val trace: List<TraceStep> = emptyList())
 data class Snapshot(val todayCount: Int, val creditedCount: Int, val queuedCount: Int, val attentionCount: Int, val lastReceivedAt: Long, val lastSentAt: Long)

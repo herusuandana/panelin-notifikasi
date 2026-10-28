@@ -39,7 +39,7 @@ object Forwarding {
         manager.createNotificationChannel(android.app.NotificationChannel("monitoring", "Status pemantauan", android.app.NotificationManager.IMPORTANCE_LOW))
         val title = when {
             !listenerEnabled(context) -> "Menunggu akses notifikasi"
-            !listenerConnected(context) -> "Menunggu listener Android"
+            !listenerConnected(context) -> "Menunggu sambungan Android"
             else -> "Panelin sedang memantau"
         }
         val intent = android.app.PendingIntent.getActivity(context, 0, android.content.Intent(context, MainActivity::class.java), android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT)
@@ -109,12 +109,23 @@ class ForwarderService : NotificationListenerService() {
                 // Consent and package selection are checked BEFORE notification extras are touched.
                 val destination = store.selected(sbn.packageName) ?: return@execute
                 val notification = sbn.notification ?: return@execute
-                if (notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return@execute
-                val extras = notification.extras ?: return@execute
+                val key = "${sbn.key}:${sbn.postTime}"
+                if (notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) {
+                    store.recordSkip(sbn.packageName, "group", key)
+                    return@execute
+                }
+                val extras = notification.extras ?: run {
+                    store.recordSkip(sbn.packageName, "invalid", key)
+                    return@execute
+                }
                 val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
                 val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
                 val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
-                if (!Core.shouldForward(title, text, big)) return@execute
+                val reason = Core.skipReason(title, text, big)
+                if (reason != null) {
+                    store.recordSkip(sbn.packageName, reason, key)
+                    return@execute
+                }
                 // postTime distinguishes reuse of a notification ID; content digest preserves updates.
                 store.enqueue(sbn.packageName, destination.label, title, text, big, "${sbn.key}:${sbn.postTime}")
             } catch (_: Exception) {

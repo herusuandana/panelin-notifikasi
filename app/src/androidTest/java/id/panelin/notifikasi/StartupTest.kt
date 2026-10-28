@@ -6,7 +6,7 @@ import org.junit.Test
 class StartupTest {
  @get:Rule val ui = createAndroidComposeRule<MainActivity>()
  @Test fun coldStartRendersDashboardWithoutNotificationPermission() {
-  ui.onNodeWithText("Kendali notifikasi").assertIsDisplayed()
+  ui.onNodeWithText("Notifikasi pembayaran").assertIsDisplayed()
   ui.onNodeWithText("Beranda").assertIsSelected()
  }
 }

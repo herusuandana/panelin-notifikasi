@@ -22,9 +22,13 @@ run('shell', 'settings', 'put', 'global', 'window_animation_scale', '0')
 run('shell', 'settings', 'put', 'global', 'transition_animation_scale', '0')
 run('shell', 'settings', 'put', 'global', 'animator_duration_scale', '0')
 run('shell', 'input', 'keyevent', '82')
+assert run('shell', 'id', '-u').strip() == '0', 'Run adb root on this disposable emulator first.'
 run('install', '-r', str(root / 'app/build/outputs/apk/debug/app-debug.apk'))
 run('install', '-r', str(root / 'app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk'))
-for name in ['StartupTest', 'ComponentTest', 'RedesignTest', 'ResponsiveTest', 'EditorSecurityTest', 'StoreSecurityTest', 'QueueBehaviorTest', 'StatusNotificationTest', 'WorkerContractTest', 'ClientSmokeTest']:
+for name in ['StartupTest', 'ComponentTest', 'RedesignTest', 'ResponsiveTest', 'EditorSecurityTest', 'StoreSecurityTest', 'QueueBehaviorTest', 'StatusNotificationTest', 'WorkerContractTest', 'TraceStoreTest', 'TraceMigrationTest', 'TraceRegressionTest', 'ResponseTraceTest', 'TraceUiTest', 'ClientSmokeTest']:
+    offline = name in ('TraceStoreTest', 'TraceRegressionTest', 'QueueBehaviorTest')
+    run('shell', 'svc', 'wifi', 'disable' if offline else 'enable')
+    run('shell', 'svc', 'data', 'disable' if offline else 'enable')
     run('shell', 'pm', 'clear', 'id.panelin.notifikasi')
     result = run('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', f'id.panelin.notifikasi.{name}', 'id.panelin.notifikasi.test/androidx.test.runner.AndroidJUnitRunner', timeout=300)
     (output / f'{name}.txt').write_text(result)

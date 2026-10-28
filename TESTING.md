@@ -1,84 +1,95 @@
 # Panduan pengujian
 
-[Unduh dan pasang](README.md) · [Hasil v1.0.0](QA-RESULTS.md) · [Privasi](PRIVACY.md)
+[Unduh dan pasang](README.md) · [Hasil QA](QA-RESULTS.md) · [Privasi](PRIVACY.md)
 
-Build/test tidak membuktikan keaslian pembayaran atau kompatibilitas semua HP. Catat hasil sebagai **lulus**, **gagal**, atau **belum diuji**, beserta versi aplikasi, Android, merek/model, package sumber, dan langkah reproduksi. Jangan menyebarkan isi notifikasi privat.
+Build/test bukan bukti keaslian pembayaran atau kompatibilitas semua HP. Catat **lulus**, **gagal**, atau **belum diuji**, versi aplikasi, Android, merek/model, package sumber, dan langkah reproduksi. Jangan bagikan notifikasi privat.
 
 ## Sebelum uji client
 
-- Cocokkan checksum APK dan fingerprint sertifikat release di [hasil QA](QA-RESULTS.md).
-- Dapatkan persetujuan pemilik perangkat; jangan meminta PIN/password/OTP dompet.
-- Utamakan website staging. Jika memakai produksi, sepakati invoice/nominal dan rekonsiliasi nyata dengan client. **Jangan mengirim payload pembayaran buatan ke callback produksi.**
-- Preset backend yang diperiksa adalah DANA Bisnis, bukan seluruh format DANA. Pastikan parser sesuai notifikasi asli.
+- Cocokkan checksum APK dan fingerprint sertifikat di [hasil QA](QA-RESULTS.md).
+- Minta persetujuan pemilik perangkat, bukan PIN/password/OTP dompet.
+- Utamakan staging. Untuk produksi, sepakati invoice, nominal, dan rekonsiliasi dengan client. **Jangan kirim payload pembayaran buatan ke callback produksi.**
+- Preset backend yang diperiksa hanya DANA Bisnis. Cocokkan parser dengan notifikasi asli.
 
-## Checklist penerimaan perangkat
+## Checklist perangkat
 
 | Area | Kriteria |
 | --- | --- |
-| Instalasi bersih | Tidak ada endpoint/token, transaksi contoh, atau izin yang diberikan diam-diam |
-| Izin ditolak | UI tetap dapat digunakan dan tidak mengaku siap memantau |
-| Pemilihan sumber | Hanya aplikasi yang dipilih dan diaktifkan diproses; aplikasi lain tidak disimpan/dikirim |
-| Konfigurasi | HTTP, query, fragment, dan userinfo ditolak; domain ditinjau sebelum simpan |
-| Pembayaran nyata | Invoice dibuat melalui website, nominal dibayar tepat; mutasi, riwayat, deposit, dan saldo cocok; hanya satu kredit/ledger |
-| Duplikat/retry | Update notifikasi dan retry tidak menggandakan saldo; gunakan lingkungan terisolasi untuk replay |
-| Offline/pulih | Antrean bertahan dan terkirim saat jaringan pulih; hapus riwayat tidak menghapus pending |
-| Jeda | Pemantauan/sumber nonaktif menghentikan pengiriman berikutnya; permintaan in-flight mungkin selesai |
-| Perubahan tujuan | Endpoint/token baru menahan antrean lama, tidak mengalihkannya otomatis |
-| Hasil server | 401/404/422 memerlukan perhatian; 5xx/429/jaringan dicoba ulang secara terbatas |
-| Hasil deposit | ignored/unmatched/ambiguous/review/duplicate tidak dianggap kredit saldo |
-| Filter | Promo, OTP, transaksi keluar/gagal tidak dianggap pembayaran masuk |
-| Background | Uji layar mati, Doze, reboot, dan baterai; catat pengaturan OEM serta keterlambatan |
-| Listener | Cabut izin dan aktifkan lagi; amati status serta pemulihan sambungan |
-| Tampilan | Semua tab, daftar panjang/scroll, font besar, keyboard, rotasi, dan masking token |
-| Pembaruan | APK dengan sertifikat sama dan versionCode lebih tinggi mempertahankan konfigurasi/pending |
-| Privasi | Tidak ada token/payload di log, source, backup, atau screenshot yang dibagikan |
+| Instalasi bersih | Tanpa endpoint/token, transaksi contoh, atau izin diam-diam |
+| Izin ditolak | UI tetap bisa dipakai, tidak mengaku siap memantau |
+| Sumber | Hanya sumber terpilih dan aktif diproses, sumber lain tidak disimpan/dikirim |
+| Konfigurasi | HTTP, query, fragment, dan userinfo ditolak, domain ditinjau sebelum simpan |
+| Pembayaran nyata | Invoice dari website, nominal tepat, mutasi/riwayat/deposit/saldo cocok, hanya satu kredit/ledger |
+| Duplikat/retry | Update notifikasi dan retry tidak menggandakan saldo, replay hanya di lingkungan terisolasi |
+| Offline/pulih | Antrean bertahan lalu terkirim saat jaringan pulih, hapus riwayat tidak menghapus pending |
+| Jeda | Pemantauan/sumber nonaktif menghentikan pengiriman berikutnya, permintaan berjalan mungkin selesai |
+| Tujuan berubah | Endpoint/token baru menahan antrean lama, tidak mengalihkannya |
+| Hasil server | 401/404/422 perlu perhatian, 5xx/429/jaringan dicoba ulang terbatas |
+| Hasil deposit | ignored/unmatched/ambiguous/review/duplicate bukan kredit saldo |
+| Filter | Promo, OTP, transaksi keluar/gagal bukan pembayaran masuk |
+| Background | Uji layar mati, Doze, reboot, dan baterai, catat pengaturan OEM serta keterlambatan |
+| Listener | Cabut/aktifkan izin, amati status dan pemulihan sambungan |
+| Tampilan | Semua tab, daftar panjang/scroll, font besar, keyboard, rotasi, masking token |
+| Pembaruan | Sertifikat sama dan versionCode lebih tinggi, konfigurasi/pending tetap tersimpan |
+| Privasi | Tanpa token/payload di log, source, backup, atau screenshot yang dibagikan |
 
-Force stop dapat membutuhkan pembukaan ulang aplikasi. Tidak ada pengaturan OEM yang menjamin pengiriman real-time tanpa gangguan.
+Force stop bisa memerlukan pembukaan ulang aplikasi. Pengaturan OEM tidak menjamin pengiriman real-time tanpa gangguan.
 
-## Batas kontrak backend
+## Batas backend
 
-Fingerprint backend saat diperiksa tidak menggunakan ID transaksi/waktu pembayaran tepercaya. Pembayaran berulang dengan akun/package/judul/nominal identik dapat dianggap duplikat; nominal yang memiliki invoice historis dapat ditahan untuk review. Jangan melonggarkan pengaman untuk membuat tes lulus; rekonsiliasi dan konfirmasi admin dilakukan setelah memeriksa mutasi.
+Fingerprint backend yang diperiksa tidak memakai ID transaksi/waktu pembayaran tepercaya. Akun/package/judul/nominal identik bisa dianggap duplikat. Nominal dengan invoice historis bisa ditahan untuk review. Jangan longgarkan pengaman agar tes lulus. Periksa mutasi sebelum rekonsiliasi dan konfirmasi admin.
 
-## Pemeriksaan otomatis pengembang
+## Pemeriksaan pengembang
 
-Jalankan dari root repository dengan JDK 17 dan Android SDK 35:
+Dari root repository dengan JDK 17 dan Android SDK 35:
 
 ```sh
 ./gradlew testDebugUnitTest lintRelease assembleDebug assembleDebugAndroidTest
 python3 scripts/check-release.py
 python3 scripts/check-startup.py
 python3 scripts/check-ui-components.py
+python3 scripts/check-ui-copy.py
 ```
 
-Untuk artefak bertanda tangan, `python3 scripts/build-release.py assembleDebug assembleDebugAndroidTest` menjalankan unit test, lint, build release, dan verifikasi signature. Ikuti catatan signing pada [README](README.md); jangan mengganti identitas resmi.
+`python3 scripts/build-release.py assembleDebug assembleDebugAndroidTest` menjalankan unit test, lint, build release, dan verifikasi signature. Ikuti [aturan signing](README.md), jangan ganti identitas resmi.
 
 ### Emulator terisolasi
 
-Helper emulator memakai toolchain lokal di `$HOME/.local/share/panelin-android-toolchain` dengan JDK 17, command-line tools, SDK 35/Build Tools 35.0.0, emulator, dan image Android 26 x86_64. `setup-local-sdk.py` memasang paket SDK setelah struktur toolchain tersedia; bukan installer lengkap JDK/Gradle. Sesuaikan lokasi helper bila workstation Anda berbeda.
+Helper memakai `$HOME/.local/share/panelin-android-toolchain`: JDK 17, command-line tools, SDK 35/Build Tools 35.0.0, emulator, dan image Android 26 x86_64. `setup-local-sdk.py` memasang paket SDK setelah struktur toolchain tersedia, bukan installer JDK/Gradle lengkap. Sesuaikan lokasi dengan workstation.
 
 ```sh
 python3 scripts/start-emulator.py
 # Di terminal lain, setelah APK debug/instrumentation dibangun:
+$HOME/.local/share/panelin-android-toolchain/android-sdk/platform-tools/adb -s emulator-5580 root
 python3 scripts/device-check.py
 # Untuk pemeriksaan navigasi APK release yang telah dipasang:
 python3 scripts/check-release-ui.py
+# Setelah APK debug dan instrumentation terpasang:
+python3 scripts/check-responsive.py
 ```
 
-**Jangan jalankan helper ini pada HP client berdata nyata.** Serial emulator dipatok ke `emulator-5580`; device-check membersihkan data/uninstall aplikasi fixture. Setelah seluruh tes lulus, helper memasang APK release. Jika suite terhenti lebih awal, langkah akhir itu tidak dijalankan.
+**Jangan jalankan helper pada HP client berdata nyata.** Serial dipatok ke `emulator-5580`. device-check menghapus data/uninstall aplikasi fixture, lalu memasang APK release hanya jika seluruh tes lulus. Jika suite berhenti, langkah akhir tidak dijalankan.
 
-Hasil per kelas dan screenshot lokal ada di `dist/qa/` (tidak di-commit). Host tanpa KVM dapat mengalami timeout/ANR sistem; periksa screenshot/hierarki dan jangan mengklaim tes yang terhalang telah lulus.
+Hasil per kelas dan screenshot ada di `dist/qa/`, tidak di-commit. Host tanpa KVM bisa mengalami timeout/ANR sistem. Periksa screenshot/hierarki, jangan nyatakan tes terhalang sebagai lulus.
 
-- `ComponentTest`: semantik checked state toggle Compose dan checkbox nonaktif yang tidak menerima persetujuan.
-- `RedesignTest`: empat tab Compose dan selector riwayat, tanpa data tujuan bawaan.
-- `ResponsiveTest`: scroll ke bantuan paling bawah, buka sheet, periksa FLAG_SECURE, dan jangkau aksi penutup. Jalankan terpisah pada font besar/ukuran lain; bukan bukti semua layout.
-- `EditorSecurityTest`: fixture domain `.invalid` dengan forwarding dijeda; masking token, persetujuan wajib, keamanan Activity, dan pembatalan konfigurasi. Bukan bukti virtual autofill structure atau overlay attack sudah diuji.
-- `check-ui-components.py`: guard source Compose, inset dan proteksi root/window; bukan bukti visual/runtime.
-- `StartupTest`: membuka Activity dan memeriksa judul dashboard, tanpa bergantung pada UI Automator atau izin notifikasi. Jalankan juga pada Android 15/API 35 untuk jalur system bar modern.
-- `check-startup.py`: guard urutan inisialisasi source, bukan pengganti tes runtime.
-- `StoreSecurityTest`: SQLite/Keystore nyata dan penolakan URL tidak aman.
-- `QueueBehaviorTest`: pending, pause, hapus riwayat, dan credential-change hold. Bukan simulasi ketahanan offline menyeluruh.
-- `StatusNotificationTest`: status tidak mengaku tersambung tanpa akses listener.
-- `WorkerContractTest`: worker/JSON/outcome nyata melalui transport in-memory, tanpa request eksternal.
-- `ClientSmokeTest`: navigasi tanpa izin sensitif dan tanpa data bawaan; keterbatasan hasil terakhir dicatat di QA.
+| Pemeriksaan | Cakupan dan batas |
+| --- | --- |
+| `ComponentTest` | Checked state toggle Compose, checkbox nonaktif tidak menerima persetujuan |
+| `RedesignTest` | Empat tab Compose, selector riwayat, tanpa tujuan bawaan |
+| `ResponsiveTest` | Scroll ke bantuan, buka sheet, FLAG_SECURE, aksi penutup. Ulangi terpisah untuk font besar/ukuran lain, bukan bukti semua layout |
+| `EditorSecurityTest` | Domain `.invalid`, penerusan dijeda, masking token, persetujuan wajib, keamanan Activity, pembatalan. Bukan bukti virtual autofill structure atau serangan overlay |
+| `check-ui-components.py` | Guard source Compose, inset, proteksi root/window. Bukan bukti visual/runtime |
+| `StartupTest` | Buka Activity dan periksa dashboard tanpa UI Automator/izin notifikasi. Ulangi di Android 15/API 35 untuk system bar modern |
+| `check-startup.py` | Guard urutan source, bukan tes runtime |
+| `StoreSecurityTest` | SQLite/Keystore nyata, penolakan URL tidak aman |
+| `QueueBehaviorTest` | Pending, pause, hapus riwayat, credential-change hold. Bukan uji offline menyeluruh |
+| `StatusNotificationTest` | Status tidak mengaku tersambung tanpa akses listener |
+| `WorkerContractTest` | Worker/JSON/outcome dan jejak HTTP nyata, transport in-memory tanpa request eksternal |
+| `TraceStoreTest` | Alasan skip tanpa isi, percobaan/retry, hapus riwayat tidak menghapus pending/dedup |
+| `TraceMigrationTest` | Upgrade SQLite v1 ke v2 menjaga antrean/dedup, wajib proses dan database baru |
+| `TraceRegressionTest` | Token lama disamarkan, antrean tidak tertutup promosi, recovery batas percobaan, dedup setelah hapus |
+| `ResponseTraceTest` | HTTP 401/503, HTML, respons besar/kosong, timeout, dan penyaringan rahasia tanpa jaringan |
+| `TraceUiTest` | Timeline, ID korelasi, label lokal/website, isi hanya dibuka saat diminta |
+| `ClientSmokeTest` | Navigasi tanpa izin sensitif/data bawaan, hasil terakhir terbatas sesuai QA |
 
-Pemeriksaan release langsung memverifikasi judul halaman melalui hierarki aksesibilitas. Pemeriksaan ini tidak membuktikan pemrosesan pembayaran end-to-end.
+Pemeriksaan APK release memverifikasi judul halaman lewat hierarki aksesibilitas, bukan pembayaran end-to-end.

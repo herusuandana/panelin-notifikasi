@@ -17,29 +17,33 @@ class EditorSecurityTest {
    ui.activity.getSharedPreferences("ui_privacy",0).edit().putBoolean("acknowledged_v1",true).commit()
    AppStore(ui.activity).saveDestination(Destination("id.panelin.fixture","Fixture","https://client.invalid/callback/notification/1",token,false))
   }
-  ui.waitUntil(30000) { ui.onAllNodesWithText("Privasi, sebelum memulai").fetchSemanticsNodes().isEmpty() }
+  ui.waitUntil(30000) { ui.onAllNodesWithText("Sebelum memulai").fetchSemanticsNodes().isEmpty() }
   ui.onNodeWithText("Aplikasi").performClick()
-  ui.onNodeWithContentDescription("app-search").performTextInput("id.panelin.fixture")
-  ui.onNode(hasScrollAction()).performScrollToNode(hasText("Kelola tujuan →"))
-  ui.onNodeWithText("Kelola tujuan →").performClick()
-  ui.onNodeWithContentDescription("token").assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Password))
-  ui.onNodeWithContentDescription("token").performClick() /* token must never become unmasked */
+  ui.onNodeWithTag("page-content").performScrollToNode(hasTestTag("app-search"))
+  ui.onNodeWithTag("app-search").assertIsDisplayed().performTextInput("id.panelin.fixture")
+  ui.onNodeWithTag("page-content").performScrollToNode(hasText("Kelola tujuan"))
+  ui.onNodeWithText("Kelola tujuan").performClick()
+  ui.onNodeWithTag("token").assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Password))
+  ui.onNodeWithTag("token").performClick() /* token must never become unmasked */
   ui.activityRule.scenario.onActivity { it.currentFocus?.clearFocus() }
-  val rendered = ui.onNodeWithContentDescription("token").fetchSemanticsNode().config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Text) { emptyList() }
+  val rendered = ui.onNodeWithTag("token").fetchSemanticsNode().config.getOrElse(androidx.compose.ui.semantics.SemanticsProperties.Text) { emptyList() }
   assertFalse(rendered.any { it.text.contains(token) })
   ui.runOnUiThread {
    assertEquals(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS,ui.activity.window.decorView.importantForAutofill)
    assertTrue(ui.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
   }
-  ui.onNodeWithContentDescription("token").performTextReplacement("replacement-fixture-token")
-  ui.onNodeWithText("Simpan").performScrollTo().performClick()
-  ui.onNodeWithText("Persetujuan diperlukan sebelum menyimpan tujuan.").performScrollTo().assertIsDisplayed()
+  ui.onNodeWithTag("token").performTextReplacement("replacement-fixture-token")
+  // Keep the keyboard open: scrolling must still reach consent and submit.
+  ui.onNodeWithText("Saya berwenang",substring=true).performScrollTo().assertIsDisplayed()
+  ui.onNodeWithText("Simpan").performScrollTo().assertIsDisplayed().performClick()
+  ui.onNodeWithText("Setujui pengiriman data sebelum menyimpan.").performScrollTo().assertIsDisplayed()
   assertEquals(token,AppStore(ui.activity).destinations().single { it.packageName == "id.panelin.fixture" }.token)
   ui.onNodeWithText("Batal").performScrollTo().performClick()
   ui.activityRule.scenario.recreate()
   ui.onNodeWithText("Aplikasi").assertIsSelected()
-  ui.onNodeWithContentDescription("token").assertDoesNotExist()
-  ui.onNodeWithContentDescription("app-search").assertExists()
+  ui.onNodeWithTag("token").assertDoesNotExist()
+  ui.onNodeWithTag("page-content").performScrollToNode(hasTestTag("app-search"))
+  ui.onNodeWithTag("app-search").assertIsDisplayed()
   assertFalse(AppStore(ui.activity).enabled)
  }
 }

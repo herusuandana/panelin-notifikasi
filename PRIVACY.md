@@ -1,44 +1,46 @@
-# Kebijakan privasi — Panelin Notifikasi
+# Privasi Panelin Notifikasi
 
-Berlaku untuk versi 1.0.0. Diperbarui: 27 Oktober 2026.
+Berlaku hingga versi 1.4.0. Diperbarui: 28 Oktober 2026.
 
-Aplikasi ini dipasang pada HP pemilik/admin website Panelin, bukan HP pelanggan yang melakukan deposit. Pemilik perangkat menentukan sumber notifikasi dan website penerimanya.
+Aplikasi dipasang di HP pemilik/admin website Panelin, bukan pelanggan yang deposit. Pemilik perangkat memilih sumber notifikasi dan website penerima.
 
 ## Data yang diproses
 
-Akses notifikasi Android memberi visibilitas luas di tingkat sistem. Aplikasi memeriksa apakah package sumber dipilih dan diaktifkan **sebelum membaca isi notifikasi**, lalu menerapkan penyaringan lokal untuk pembayaran masuk. Penyaringan bukan jaminan mengenali setiap format atau semua informasi sensitif; jangan pilih aplikasi pribadi yang tidak diperlukan. Android juga dapat menutupi notifikasi sensitif.
+Akses notifikasi Android memberi akses luas di tingkat sistem. Aplikasi memeriksa package yang dipilih dan aktif **sebelum membaca isi notifikasi**, lalu menyaring pembayaran masuk secara lokal. Filter tidak menjamin semua format atau data sensitif dikenali. Jangan pilih aplikasi pribadi yang tidak diperlukan. Android juga dapat menutupi notifikasi sensitif.
 
-Data yang diproses mencakup package/nama aplikasi, judul, teks, teks panjang, identitas kejadian untuk deduplikasi lokal, waktu pencatatan, tujuan webhook, token, serta status dan jumlah percobaan pengiriman. Daftar aplikasi yang memiliki launcher digunakan secara lokal untuk pemilihan sumber; bukan jaminan seluruh package sistem dapat ditampilkan.
+Data mencakup package/nama aplikasi, judul, teks, teks panjang, identitas kejadian untuk deduplikasi, waktu pencatatan, tujuan webhook, token, status, dan jumlah percobaan kirim. Daftar aplikasi launcher hanya dipakai lokal untuk memilih sumber, bukan daftar seluruh package sistem.
 
-## Tujuan pengiriman
+## Pengiriman
 
-Package, judul, teks, teks panjang, dan token penerima dikirim melalui HTTPS langsung ke URL website yang dikonfigurasi client. Tidak ada endpoint/token bawaan, server pengumpul Panelin, analitik, iklan, atau penjualan data di aplikasi ini.
+Package, judul, teks, teks panjang, dan token penerima dikirim lewat HTTPS langsung ke URL website pilihan client. Tidak ada endpoint/token bawaan, server pengumpul Panelin, analitik, iklan, atau penjualan data.
 
-Website penerima memiliki kebijakan penyimpanan, log, dan akses admin sendiri. Aplikasi Android tidak menghapus data yang sudah diterima website. Mengunduh APK dari GitHub mengikuti kebijakan GitHub; pengunduhan tersebut terpisah dari pemrosesan notifikasi oleh aplikasi.
+Website penerima mengatur penyimpanan, log, dan akses admin sendiri. Aplikasi tidak bisa menghapus data yang sudah diterima website. Unduhan APK mengikuti kebijakan GitHub, terpisah dari pemrosesan notifikasi.
 
-## Penyimpanan pada perangkat
+## Penyimpanan perangkat
 
-Konfigurasi sensitif dan payload antrean/riwayat dienkripsi menggunakan AES-GCM dengan kunci Android Keystore. Backup cloud dan aturan transfer data aplikasi dinonaktifkan. Perlindungan ini bukan jaminan terhadap HP yang di-root, malware, atau sistem yang dikompromikan. Lindungi perangkat dan layar kuncinya.
+Konfigurasi sensitif dan payload antrean/riwayat dienkripsi dengan AES-GCM dan kunci Android Keystore. Backup cloud dan transfer data aplikasi dinonaktifkan. Ini tidak menjamin keamanan pada HP root, malware, atau sistem terkompromi. Lindungi perangkat dan layar kuncinya.
 
-Antrean tertunda/ditahan tetap disimpan agar pembayaran tidak hilang diam-diam. Menghapus riwayat hanya menghapus catatan terminal; penanda deduplikasi lokal dipertahankan untuk mencegah replay. Tidak ada batas retensi otomatis yang menghapus antrean belum selesai. Menghapus data aplikasi atau uninstall menghapus konfigurasi/antrean lokal dan dapat menghilangkan kemampuan memulihkannya; jangan lakukan sebelum rekonsiliasi.
+Antrean tertunda/ditahan tetap disimpan tanpa batas retensi otomatis agar pembayaran tidak hilang diam-diam. Hapus riwayat hanya menghapus catatan terminal, bukan penanda deduplikasi pencegah replay. Hapus data aplikasi atau uninstall menghapus konfigurasi dan antrean lokal yang mungkin tidak bisa dipulihkan. Lakukan rekonsiliasi lebih dulu.
+
+Diagnostik lokal menyimpan maksimal 2000 langkah terenkripsi: alasan notifikasi dilewati, waktu dan tujuan percobaan, durasi, HTTP, serta field respons `status`/`outcome` yang diizinkan. Isi notifikasi yang dilewati, token, header, dan respons mentah tidak disimpan dalam jejak. Riwayat diagnostik bisa terpangkas tanpa menghapus antrean atau penanda duplikat.
 
 ## Izin dan akses
 
-- Akses notifikasi, diberikan secara sadar melalui pengaturan Android.
-- Izin notifikasi status pada Android 13 atau lebih baru.
+- Akses notifikasi melalui persetujuan di pengaturan Android.
+- Notifikasi status pada Android 13 ke atas.
 - Internet/status jaringan untuk pengiriman dan retry.
 - Visibilitas aplikasi launcher untuk memilih sumber.
 
-Aplikasi tidak meminta PIN/password/OTP dompet, SMS, kontak, lokasi, mikrofon, Accessibility, Device Admin, root, atau akses seluruh penyimpanan. Aplikasi tidak membuka sesi login atau mengendalikan aplikasi pembayaran.
+Aplikasi tidak meminta PIN/password/OTP dompet, SMS, kontak, lokasi, mikrofon, Accessibility, Device Admin, root, atau akses seluruh penyimpanan. Aplikasi tidak login atau mengendalikan aplikasi pembayaran.
 
-## Kendali client
+## Kendali dan persetujuan
 
-Anda dapat menjeda pemantauan, menonaktifkan sumber, menghapus konfigurasi/riwayat terminal, dan mencabut akses notifikasi melalui Android. Permintaan yang sudah berlangsung mungkin tetap selesai; byte yang sudah dikirim tidak dapat ditarik kembali.
+Anda bisa menjeda pemantauan, menonaktifkan sumber, menghapus konfigurasi/riwayat terminal, dan mencabut akses notifikasi lewat Android. Permintaan yang sedang berjalan mungkin selesai. Data yang sudah dikirim tidak bisa ditarik kembali.
 
-Perubahan endpoint/token atau penghapusan tujuan menahan antrean lama, bukan mengalihkannya ke website baru. Bila HP hilang atau token terpapar, rotasi token pada website dan amankan perangkat.
+Perubahan endpoint/token atau penghapusan tujuan menahan antrean lama, bukan mengalihkannya. Jika HP hilang atau token bocor, rotasi token di website dan amankan perangkat.
 
-## Persetujuan dan bantuan
+Pahami data dan penerimanya sebelum menyetujui sumber. Akses notifikasi bukan bukti keaslian transaksi. Pengelola website/rekening tetap harus memeriksa mutasi dan kejadian meragukan.
 
-Pemilik perangkat harus memahami data yang dikirim serta penerimanya sebelum mengaktifkan sumber. Akses notifikasi bukan bukti keaslian transaksi; pemeriksaan mutasi dan kejadian meragukan tetap tanggung jawab pengelola website/rekening.
+## Bantuan
 
-Untuk pertanyaan privasi, hubungi pengelola Panelin Anda. Jika melaporkan masalah melalui [GitHub Issues](https://github.com/herusuandana/panelin-notifikasi/issues), jangan sertakan token, data pelanggan, atau isi notifikasi privat. Panduan pemasangan tersedia di [README](README.md).
+Hubungi pengelola Panelin Anda. Jangan sertakan token, data pelanggan, atau notifikasi privat di [GitHub Issues](https://github.com/herusuandana/panelin-notifikasi/issues). Lihat [panduan pemasangan](README.md).

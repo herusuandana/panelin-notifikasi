@@ -36,10 +36,14 @@ class DeliveryWorker(context: Context, parameters: WorkerParameters) : Worker(co
     private fun send(store: AppStore, pending: AppStore.Pending) {
         val endpoint = pending.data.getString("endpoint")
         if (!Core.validEndpoint(endpoint)) {
-            store.complete(pending, "attention", "URL tujuan tidak valid; tidak dikirim", System.currentTimeMillis())
+            store.complete(pending, "attention", "URL tujuan tidak valid. Data tidak dikirim.", System.currentTimeMillis())
             return
         }
         var connection: HttpsURLConnection? = null
+        var started = false
+        var responded = false
+        var httpCode: Int? = null
+        val startedAt = android.os.SystemClock.elapsedRealtime()
         try {
             connection = URL(endpoint).openConnection() as HttpsURLConnection
             connection.instanceFollowRedirects = false
@@ -62,8 +66,17 @@ class DeliveryWorker(context: Context, parameters: WorkerParameters) : Worker(co
                 store.release(pending)
                 return
             }
+            store.recordAttempt(pending, pending.attempts, System.currentTimeMillis())
+            if (isStopped || !store.maySend(pending)) {
+                store.release(pending)
+                store.recordCancelled(pending)
+                return
+            }
+            started = true
             connection.outputStream.use { it.write(body) }
             val code = connection.responseCode
+            httpCode = code
+            var oversized = false
             val raw = (if (code in 200..299) connection.inputStream else connection.errorStream)?.use { stream ->
                 val output = java.io.ByteArrayOutputStream()
                 val buffer = ByteArray(4096)
@@ -72,16 +85,35 @@ class DeliveryWorker(context: Context, parameters: WorkerParameters) : Worker(co
                     if (size == -1) break
                     output.write(buffer, 0, size)
                 }
-                if (output.size() > 65_536) "" else output.toString("UTF-8")
+                oversized = output.size() > 65_536
+                if (oversized) "" else output.toString("UTF-8")
             }.orEmpty()
             val json = try { JSONObject(raw) } catch (_: Exception) { null }
+            val category = when {
+                oversized -> "Respons terlalu besar"
+                raw.isBlank() -> "Respons kosong"
+                json != null -> "JSON valid"
+                raw.trimStart().startsWith("<") -> "HTML atau halaman perantara"
+                else -> "Respons bukan JSON"
+            }
+            store.recordResponse(pending, pending.attempts, code, android.os.SystemClock.elapsedRealtime() - startedAt, category,
+                json?.opt("status") as? Boolean, json?.opt("outcome") as? String)
+            responded = true
             val outcome = Core.disposition(code, json?.opt("status") == true, json?.optString("outcome").orEmpty())
-            if (outcome == "retry") retry(store, pending, connection.getHeaderField("Retry-After"), "HTTP $code; dijadwalkan ulang")
+            if (outcome == "retry") retry(store, pending, connection.getHeaderField("Retry-After"), "HTTP $code. Akan dicoba lagi.")
             else store.complete(pending, outcome, detail(outcome, code), System.currentTimeMillis())
-        } catch (_: IOException) {
-            retry(store, pending, null, "Gangguan jaringan; hasil server belum diketahui")
+        } catch (error: IOException) {
+            if (started && !responded) store.recordResponse(pending, pending.attempts, httpCode, android.os.SystemClock.elapsedRealtime() - startedAt,
+                when (error) {
+                    is javax.net.ssl.SSLException -> "Koneksi TLS gagal. Hasil belum diketahui."
+                    is java.net.UnknownHostException -> "DNS gagal. Hasil belum diketahui."
+                    is java.net.SocketTimeoutException -> "Batas waktu koneksi. Hasil belum diketahui."
+                    else -> "Jaringan bermasalah. Hasil belum diketahui."
+                }, null, null)
+            retry(store, pending, null, "Jaringan bermasalah. Hasil di website belum diketahui.")
         } catch (_: Exception) {
-            store.complete(pending, "attention", "Pengiriman tidak dapat diproses; periksa konfigurasi", System.currentTimeMillis())
+            if (started && !responded) runCatching { store.recordResponse(pending, pending.attempts, httpCode, android.os.SystemClock.elapsedRealtime() - startedAt, "Pemrosesan gagal. Hasil belum diketahui.", null, null) }
+            store.complete(pending, "attention", "Pengiriman gagal diproses. Periksa pengaturan.", System.currentTimeMillis())
         } finally {
             connection?.disconnect()
         }
@@ -89,7 +121,7 @@ class DeliveryWorker(context: Context, parameters: WorkerParameters) : Worker(co
 
     private fun retry(store: AppStore, pending: AppStore.Pending, retryAfter: String?, detail: String) {
         if (pending.attempts >= MAX_ATTEMPTS) {
-            store.complete(pending, "attention", "Batas percobaan tercapai; hasil server belum diketahui, periksa mutasi sebelum mengirim ulang", System.currentTimeMillis())
+            store.complete(pending, "attention", "Batas percobaan tercapai. Hasil belum diketahui. Periksa mutasi sebelum mengirim ulang.", System.currentTimeMillis())
         } else {
             val now = System.currentTimeMillis()
             store.retry(pending, now + Core.retryDelay(pending.attempts, retryAfter, now), detail)
@@ -98,12 +130,12 @@ class DeliveryWorker(context: Context, parameters: WorkerParameters) : Worker(co
 
     private fun detail(outcome: String, code: Int): String = when (outcome) {
         "credited" -> "Server mengonfirmasi saldo dikreditkan"
-        "duplicate" -> "Server menandai duplikat; tidak dikreditkan ulang"
-        "ignored" -> "Diabaikan server; tidak dikreditkan"
-        "unmatched" -> "Tidak cocok dengan transaksi; periksa Panelin"
-        "ambiguous" -> "Lebih dari satu kecocokan; periksa Panelin"
+        "duplicate" -> "Duplikat. Saldo tidak dikreditkan lagi."
+        "ignored" -> "Diabaikan website. Saldo tidak dikreditkan."
+        "unmatched" -> "Tidak ada transaksi cocok. Periksa website."
+        "ambiguous" -> "Beberapa transaksi cocok. Periksa website."
         "review" -> "Memerlukan peninjauan di Panelin"
-        else -> "HTTP $code; server tidak mengonfirmasi hasil yang valid"
+        else -> "HTTP $code. Website belum mengonfirmasi hasil."
     }
 
     companion object {

@@ -19,8 +19,8 @@ class ClientSmokeTest {
         context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
         val device = UiDevice.getInstance(instrumentation)
         assertTrue("App must show navigation", device.wait(Until.hasObject(By.text("Beranda")), 60000))
-        assertTrue("Dashboard must load", device.wait(Until.hasObject(By.text("Kendali notifikasi")), 30000))
-        val headings = mapOf("Riwayat" to "Riwayat pengiriman", "Aplikasi" to "Aplikasi pilihan", "Pengaturan" to "Privasi jelas. Kendali tetap di perangkat Anda.", "Beranda" to "Kendali notifikasi")
+        assertTrue("Dashboard must load", device.wait(Until.hasObject(By.text("Notifikasi pembayaran")), 30000))
+        val headings = mapOf("Riwayat" to "Riwayat pengiriman", "Aplikasi" to "Aplikasi terhubung", "Pengaturan" to "Izin perangkat, privasi, dan bantuan.", "Beranda" to "Notifikasi pembayaran")
         // ponytail: generous waits for software emulation; these remain real visible UI assertions.
         for (tab in listOf("Riwayat", "Aplikasi", "Pengaturan", "Beranda")) {
             val target = device.wait(Until.findObject(By.text(tab)), 5000)

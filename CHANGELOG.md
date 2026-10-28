@@ -1,55 +1,67 @@
 # Catatan pembaruan
 
-APK resmi dan checksum tersedia di [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Versi di aplikasi mengikuti `versionName` dan `versionCode`; catatan yang sama tersedia melalui Pengaturan → Yang baru di versi ini.
+APK dan checksum: [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Versi mengikuti `versionName` dan `versionCode`. Catatan juga tersedia di Pengaturan → Catatan pembaruan.
+
+## 1.4.0 — 2026-10-28
+
+versionCode: 6 · Prerelease uji terbatas, QA belum lengkap
+
+- Riwayat menampilkan notifikasi yang dilewati di HP dan alasannya.
+- Jejak tiap percobaan webhook: tujuan, waktu, durasi, HTTP, dan hasil respons.
+- Respons disaring. Token, OTP/PIN, dan respons mentah tidak disimpan dalam jejak.
+- Maksimal 2000 langkah diagnostik, terpisah dari antrean dan pengaman duplikat.
+
+## 1.3.0 — 2026-10-28
+
+versionCode: 5 · Build lokal, belum dipublikasikan
+
+- Tampilan ala iOS, navigasi adaptif HP/tablet, dan mode terang/gelap.
+- Teks aplikasi, panduan, dan dokumentasi lebih singkat.
+- Antrean, webhook, enkripsi, dan perlindungan token dipertahankan.
+- Hasil pengujian dicatat di [QA](QA-RESULTS.md).
 
 ## 1.2.0 — 2026-10-27
 
-**versionCode: 4 · Status: uji terbatas — Jetpack Compose**
+**versionCode: 4 · Uji terbatas**
 
-- Mengganti UI Android Views manual dengan Jetpack Compose; tanpa JavaScript atau WebView.
-- Empat halaman reaktif, animasi navigasi/toggle, bottom sheet, ikon custom, pencarian aplikasi, dan rail untuk layar lebar.
-- Status penyimpanan gagal ditampilkan sebagai tidak diketahui; operasi simpan dan baca dilakukan di luar thread UI.
-- Token tetap tersembunyi, tidak masuk saved state, autofill dimatikan; sheet sensitif dilindungi FLAG_SECURE.
-- Layanan notifikasi, penyimpanan terenkripsi, antrean, parser, webhook, dan signing tetap sama. Tidak mengirim transaksi uji.
-- Migrasi UI tidak membuktikan crash Android 15 sudah terselesaikan; pengujian HP fisik tetap diperlukan.
+- Migrasi Android Views ke Jetpack Compose tanpa JavaScript atau WebView.
+- Empat halaman reaktif, animasi navigasi/toggle, bottom sheet, ikon custom, pencarian aplikasi, dan rail layar lebar.
+- Gagal baca penyimpanan tampil sebagai status tidak diketahui. Baca/simpan berjalan di luar thread UI.
+- Token tetap tersembunyi dan tidak masuk saved state. Autofill dimatikan, sheet sensitif memakai FLAG_SECURE.
+- Listener, enkripsi, antrean, parser, webhook, dan signing tetap sama. Tidak ada transaksi uji yang dikirim.
+- Crash Android 15 belum terbukti selesai. Uji HP fisik masih diperlukan.
 
 ## 1.1.0 — 2026-10-27
 
-**versionCode: 3 · Status: kandidat uji lokal**
+**versionCode: 3 · Kandidat uji lokal**
 
-- Desain ulang Beranda, Riwayat, Aplikasi, dan Pengaturan dengan hierarki, ikon, tipografi, serta navigasi baru.
-- Komponen visual Panelin untuk tombol, input, selector berbentuk sheet, toggle, checkbox, dialog, dan pesan dalam aplikasi; tidak menggunakan chrome kontrol bawaan.
+- Desain ulang Beranda, Riwayat, Aplikasi, dan Pengaturan, termasuk ikon, tipografi, dan navigasi.
+- Kontrol Panelin untuk tombol, input, selector sheet, toggle, checkbox, dialog, dan pesan aplikasi, tanpa chrome kontrol bawaan.
 - Penyesuaian layar sempit, landscape, tablet, teks besar, keyboard, dan area aman sistem.
-- Semantik aksesibilitas kontrol tetap dipertahankan; seluruh dialog dilindungi FLAG_SECURE.
-- Tidak mengubah penyimpanan, antrean, webhook, parser, atau saldo. Izin dan pengaturan milik Android tetap memakai UI sistem.
+- Semantik aksesibilitas tetap dipertahankan. Semua dialog memakai FLAG_SECURE.
+- Penyimpanan, antrean, webhook, parser, dan saldo tidak berubah. Izin/pengaturan Android tetap memakai UI sistem.
 
 ## 1.0.1 — 2026-10-27
 
-**versionCode: 2 · Status: uji terbatas**
+**versionCode: 2 · Uji terbatas**
 
-- Memperbaiki akses controller system bar sebelum window decor tersedia saat startup pada Android 11 ke atas, termasuk Android 15.
-- Memindahkan konfigurasi system bar setelah pemasangan content view tanpa mengubah izin atau alur pembayaran.
-- Menambahkan guard urutan startup dan tes cold start Android.
-- Tetap memakai package dan sertifikat release yang sama agar dapat diperbarui tanpa uninstall.
+- Memperbaiki urutan akses controller system bar saat startup Android 11 ke atas, termasuk Android 15. Konfigurasi dijalankan setelah content view terpasang.
+- Menambahkan guard startup dan tes cold start, tanpa mengubah izin atau alur pembayaran.
+- Package dan sertifikat tetap sama untuk pembaruan tanpa uninstall.
 
 ## 1.0.0 — 2026-10-27
 
-**versionCode: 1 · Status: uji terbatas**
+**versionCode: 1 · Uji terbatas**
 
-- Rilis perdana aplikasi pendamping untuk pemilik/admin website Panelin.
-- Pemilihan aplikasi pembayaran terpasang, pencarian, dan aktif/nonaktif per sumber.
-- URL webhook HTTPS serta token masing-masing client, tanpa server perantara bawaan.
-- Pemantauan melalui NotificationListenerService dan antrean persisten terenkripsi dengan Android Keystore.
-- Retry terbatas; antrean lama ditahan bila endpoint/token berubah.
-- Riwayat hasil backend yang membedakan kredit, duplikat, diabaikan, tidak cocok, ambigu, dan review.
-- Panduan privasi, akses notifikasi, baterai, dan autostart/OEM.
-- Logo Panelin, versi, dan changelog di dalam aplikasi.
-- APK release bertanda tangan dengan sertifikat tetap; backup data aplikasi dinonaktifkan.
+- Rilis awal untuk pemilik/admin website Panelin, dengan pencarian aplikasi pembayaran dan kendali tiap sumber.
+- URL HTTPS dan token per client, tanpa server perantara bawaan.
+- NotificationListenerService dan antrean persisten terenkripsi Android Keystore. Retry terbatas, antrean lama ditahan jika endpoint/token berubah.
+- Riwayat membedakan kredit, duplikat, diabaikan, tidak cocok, ambigu, dan review.
+- Panduan privasi, izin notifikasi, baterai/autostart OEM, logo, versi, dan changelog.
+- APK memakai sertifikat release tetap. Backup data aplikasi dinonaktifkan.
 
-### Batas rilis
+## Batas dan pembaruan
 
-Pembayaran DANA nyata sampai kredit saldo dan ketahanan background pada HP client belum diuji end-to-end. Hasil yang sudah terverifikasi serta batas emulator dicatat di [QA-RESULTS.md](QA-RESULTS.md). Ikuti [TESTING.md](TESTING.md) sebelum penggunaan operasional.
+Pembayaran DANA hingga kredit saldo dan ketahanan background pada HP client belum diuji end-to-end. Baca [hasil QA](QA-RESULTS.md) dan ikuti [panduan uji](TESTING.md) sebelum dipakai.
 
-### Pembaruan aplikasi
-
-Belum ada updater otomatis. Unduh APK resmi yang lebih baru dari Releases, lalu pasang di atas versi lama dengan package dan sertifikat sama. Jangan uninstall bila masih memiliki antrean tertunda. Perubahan versi berikutnya wajib menaikkan `versionCode`.
+Belum ada updater otomatis. Unduh APK resmi yang lebih baru dan pasang di atas versi lama dengan package serta sertifikat sama. Jangan uninstall jika masih ada antrean. Rilis berikutnya wajib menaikkan `versionCode`.

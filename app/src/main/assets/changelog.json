@@ -1,12 +1,21 @@
 [
   {
+    "version": "1.6.0",
+    "code": 8,
+    "date": "2026-10-28",
+    "changes": [
+      "Cek rilis setiap buka atau kembali ke aplikasi. Popup hanya untuk versi baru yang diizinkan, rilis uji opsional.",
+      "Unduh atas pilihan Anda, periksa APK, lalu konfirmasi pemasangan lewat Android.",
+      "Empat halaman lebih ringkas, tarik untuk memuat ulang, skeleton, pilihan khusus, dan ikon sumber di Riwayat."
+    ]
+  },
+  {
     "version": "1.5.0",
     "code": 7,
     "date": "2026-10-28",
     "changes": [
       "Beranda biru–toska dengan ringkasan pemantauan dan pintasan perangkat.",
-      "Kartu membulat dan navigasi kapsul untuk tampilan yang lebih rapi.",
-      "Antrean, jejak webhook, enkripsi, dan persetujuan tetap dipertahankan."
+      "Kartu membulat dan navigasi kapsul. Antrean, jejak webhook, enkripsi, dan persetujuan tetap sama."
     ]
   },
   {
@@ -14,9 +23,8 @@
     "code": 6,
     "date": "2026-10-28",
     "changes": [
-      "Jejak notifikasi yang dilewati di HP beserta alasannya.",
-      "Catatan tiap percobaan webhook, kode HTTP, durasi, dan hasil respons.",
-      "Jejak terenkripsi dan dibatasi 2000 langkah, tanpa token atau respons mentah."
+      "Riwayat mencatat alasan notifikasi dilewati dan tiap percobaan webhook, HTTP, durasi, serta hasil respons.",
+      "Maksimal 2000 langkah terenkripsi, tanpa token atau respons mentah."
     ]
   },
   {
@@ -24,10 +32,8 @@
     "code": 5,
     "date": "2026-10-28",
     "changes": [
-      "Tampilan baru ala iOS dengan navigasi adaptif untuk HP dan tablet.",
-      "Teks aplikasi dan panduan lebih singkat.",
-      "Warna mengikuti mode terang atau gelap perangkat.",
-      "Antrean, webhook, dan perlindungan token tetap dipertahankan."
+      "Tampilan ala iOS, navigasi adaptif HP/tablet, dan mode terang/gelap.",
+      "Teks dan panduan lebih singkat. Antrean, webhook, dan perlindungan token tetap sama."
     ]
   },
   {
@@ -35,11 +41,9 @@
     "code": 4,
     "date": "2026-10-27",
     "changes": [
-      "Migrasi UI ke Jetpack Compose, tanpa JavaScript atau WebView.",
-      "Halaman reaktif, animasi navigasi/toggle, bottom sheet, pencarian aplikasi, dan layout adaptif.",
-      "Listener, enkripsi, antrean, webhook, dan identitas signing tetap sama.",
-      "Token tidak masuk saved state. Autofill dimatikan, sheet sensitif dilindungi dari screenshot.",
-      "Uji terbatas. Android 15, HP fisik, dan pembayaran hingga kredit saldo belum terverifikasi."
+      "Jetpack Compose tanpa JavaScript/WebView, dengan animasi, sheet, pencarian, dan layout adaptif.",
+      "Token tidak masuk saved state. Autofill dimatikan, sheet sensitif dilindungi dari screenshot. Listener, antrean, webhook, dan signing tetap sama.",
+      "Uji terbatas. Crash Android 15, HP fisik, dan pembayaran hingga kredit belum terverifikasi."
     ]
   },
   {
@@ -47,11 +51,9 @@
     "code": 3,
     "date": "2026-10-27",
     "changes": [
-      "Desain ulang semua halaman dengan tampilan Panelin.",
-      "Kontrol custom untuk filter, toggle, checkbox, tombol, input, pesan, dan dialog sheet.",
-      "Penyesuaian layar sempit, landscape, tablet, dan teks besar. Bukan bukti semua ukuran sudah diuji.",
+      "Desain ulang empat halaman dan kontrol untuk layar sempit, landscape, tablet, dan teks besar. Belum semua ukuran teruji.",
       "Dialog sensitif dilindungi dari screenshot. Izin Android tetap memakai UI sistem.",
-      "Antrean, tujuan webhook, parser, dan pemrosesan saldo tidak berubah."
+      "Antrean, webhook, parser, dan pemrosesan saldo tidak berubah."
     ]
   },
   {
@@ -59,10 +61,8 @@
     "code": 2,
     "date": "2026-10-27",
     "changes": [
-      "Memperbaiki urutan startup window pada Android 11 ke atas, termasuk Android 15.",
-      "System bar diatur setelah tampilan window tersedia.",
-      "Menambahkan tes cold start. Sertifikat release tetap sama.",
-      "Crash HP pelapor dan runtime Android 15 belum terverifikasi."
+      "Memperbaiki urutan startup system bar Android 11+, termasuk Android 15, setelah tampilan tersedia.",
+      "Tes cold start ditambahkan, sertifikat tetap sama. Crash HP pelapor dan runtime Android 15 belum terverifikasi."
     ]
   },
   {
@@ -70,13 +70,9 @@
     "code": 1,
     "date": "2026-10-27",
     "changes": [
-      "Rilis awal untuk pemilik website Panelin.",
-      "Pilihan aplikasi pembayaran dan tujuan webhook per sumber.",
-      "Pengiriman HTTPS langsung ke website client.",
-      "Antrean lokal terenkripsi dengan retry terbatas saat koneksi pulih.",
-      "Riwayat hasil backend. Terkirim bukan berarti saldo dikreditkan.",
-      "Panduan akses notifikasi, baterai, dan autostart.",
-      "Token dilindungi Android Keystore. Backup data aplikasi dinonaktifkan."
+      "Rilis awal untuk admin Panelin: pilih sumber dan webhook HTTPS per aplikasi, dengan panduan izin/baterai/autostart.",
+      "Antrean terenkripsi Android Keystore dengan retry terbatas. Backup aplikasi dimatikan.",
+      "Riwayat hasil backend. Terkirim bukan berarti saldo dikreditkan."
     ]
   }
 ]

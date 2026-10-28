@@ -19,7 +19,7 @@ assert f'## {version}' in (root / 'CHANGELOG.md').read_text()
 manifest = ET.parse(root / 'app/src/main/AndroidManifest.xml').getroot()
 a = '{http://schemas.android.com/apk/res/android}'
 permissions = {p.attrib[a + 'name'] for p in manifest.findall('uses-permission')}
-assert not any(any(part in p for part in ['READ_SMS', 'READ_CONTACTS', 'QUERY_ALL_PACKAGES', 'ACCESS_FINE_LOCATION', 'RECORD_AUDIO', 'MANAGE_EXTERNAL_STORAGE', 'REQUEST_INSTALL_PACKAGES']) for p in permissions)
+assert not any(any(part in p for part in ['READ_SMS', 'READ_CONTACTS', 'QUERY_ALL_PACKAGES', 'ACCESS_FINE_LOCATION', 'RECORD_AUDIO', 'MANAGE_EXTERNAL_STORAGE']) for p in permissions)
 application = manifest.find('application')
 assert application.attrib[a + 'allowBackup'] == 'false'
 assert application.attrib[a + 'usesCleartextTraffic'] == 'false'

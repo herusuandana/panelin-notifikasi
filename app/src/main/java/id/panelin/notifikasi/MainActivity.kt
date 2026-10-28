@@ -19,6 +19,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,7 +29,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.platform.LocalContext
+import android.graphics.Bitmap
+import android.util.LruCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -52,25 +57,34 @@ import org.json.JSONArray
 import java.text.DateFormat
 import java.util.Date
 
-private val Blue: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF73D9E0) else Color(0xFF006D7A)
-private val Ink: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFEDF5F7) else Color(0xFF18343D)
-private val Muted: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFACBFC6) else Color(0xFF566A73)
-private val Canvas: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF101A20) else Color(0xFFF1F5F6)
-private val Paper: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF1B2931) else Color.White
-private val Line: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF354750) else Color(0xFFE1E9EC)
+private val Blue: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF8BB8FF) else Color(0xFF245FC5)
+private val Ink: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFF1F2F5) else Color(0xFF22252B)
+private val Muted: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFADB2BE) else Color(0xFF606773)
+private val Canvas: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF16171A) else Color(0xFFF3F4F6)
+private val Paper: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF222429) else Color.White
+private val Line: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF3A3E46) else Color(0xFFE1E4EA)
 private val Green: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF72D99C) else Color(0xFF237A43)
 private val Amber: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFFFC06B) else Color(0xFF965400)
-private val Round = RoundedCornerShape(24.dp)
-private data class SourceApp(val pkg: String, val label: String, val icon: android.graphics.Bitmap? = null)
+private val Round = RoundedCornerShape(14.dp)
+private data class SourceApp(val pkg: String, val label: String)
+private data class PackageIcon(val bitmap: Bitmap?)
+// ponytail: bounded process cache, refreshed after process restart if a package icon changes.
+private val iconCache = LruCache<String, PackageIcon>(80)
+internal val RefreshGeneration = SemanticsPropertyKey<Int>("RefreshGeneration")
 
 class MainActivity : ComponentActivity() {
     private lateinit var store: AppStore
+    private lateinit var updater: UpdateController
     private var destinations by mutableStateOf<List<Destination>>(emptyList())
     private var deliveries by mutableStateOf<List<Delivery>>(emptyList())
     private var apps by mutableStateOf<List<SourceApp>>(emptyList())
     private var snapshot by mutableStateOf<Snapshot?>(null)
     private var enabled by mutableStateOf(false)
     private var loaded by mutableStateOf(false)
+    private var initialLoading by mutableStateOf(true)
+    private var appsLoading by mutableStateOf(true)
+    private var refreshing by mutableStateOf(false)
+    private var refreshCount by mutableIntStateOf(0)
     private var loadFailed by mutableStateOf(false)
     private var appsFailed by mutableStateOf(false)
     private var busy by mutableStateOf(false)
@@ -89,6 +103,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        updater = UpdateController(this)
         store = AppStore(applicationContext)
         enableEdgeToEdge()
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
@@ -104,16 +119,21 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    override fun onStart() { super.onStart(); updater.check(false) }
+    override fun onResume() { super.onResume(); updater.resume() }
+    override fun onDestroy() { updater.close(); super.onDestroy() }
+
     private suspend fun loadApps() {
         try {
             apps = withContext(Dispatchers.IO) {
                 @Suppress("DEPRECATION")
                 packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0)
                     .filter { it.activityInfo.packageName != packageName }.distinctBy { it.activityInfo.packageName }
-                    .map { SourceApp(it.activityInfo.packageName,it.loadLabel(packageManager).toString(),runCatching { it.loadIcon(packageManager).toBitmap(96,96) }.getOrNull()) }
+                    .map { SourceApp(it.activityInfo.packageName,it.loadLabel(packageManager).toString()) }
                     .sortedBy { it.label.lowercase() }
             }; appsFailed = false
         } catch (e: CancellationException) { throw e } catch (_: Exception) { appsFailed = true }
+        finally { appsLoading = false }
     }
     private suspend fun reload() {
         if (reading || busy) return
@@ -125,10 +145,22 @@ class MainActivity : ComponentActivity() {
             acknowledged = getSharedPreferences("ui_privacy",MODE_PRIVATE).getBoolean("acknowledged_v1",false)
             loaded = true; loadFailed = false
         } catch (e: CancellationException) { throw e } catch (_: Exception) { loaded = false; loadFailed = true; snapshot = null }
-        finally { reading = false }
+        finally { reading = false; initialLoading = false }
         listener = Forwarding.listenerEnabled(this) to Forwarding.listenerConnected(this)
         postAllowed = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         batteryFree = (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
+    }
+    private fun refresh(page: Int) {
+        if(refreshing) return
+        refreshing = true
+        lifecycleScope.launch {
+            try {
+                while(reading || busy) delay(50)
+                reload()
+                if(page==2) loadApps()
+                refreshCount++
+            } finally { refreshing = false }
+        }
     }
     private fun mutate(action: () -> Unit, after: () -> Unit = {}) {
         if (busy) return
@@ -170,7 +202,7 @@ class MainActivity : ComponentActivity() {
         val historyFilters = listOf("Semua aktivitas","Dalam antrean","Perlu perhatian","Dikreditkan","Dilewati di HP")
         val labels = listOf("Beranda","Riwayat","Aplikasi","Pengaturan")
         val titles = listOf("Notifikasi pembayaran","Riwayat pengiriman","Aplikasi terhubung","Pengaturan aplikasi")
-        val subtitles = listOf("Teruskan pembayaran ke website Anda.","Periksa hasil pengiriman ke website.","Pilih aplikasi dan atur tujuan pengiriman.","Izin perangkat, privasi, dan bantuan.")
+
         val config = LocalConfiguration.current
         val fontScale = LocalDensity.current.fontScale
         val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
@@ -194,107 +226,87 @@ class MainActivity : ComponentActivity() {
         ) { padding ->
             Row(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
                 if(wide) Column(Modifier.width(200.dp).fillMaxHeight().background(Paper).verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.padding(vertical=20.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                        Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(32.dp))
-                        Text("Panelin",color=Ink,fontSize=20.sp,fontWeight=FontWeight.SemiBold)
+                    Row(Modifier.padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(24.dp))
+                        Text("Panelin",color=Ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold)
                     }
                     labels.forEachIndexed { i,label -> NavItem(i,label,tab==i,Modifier.fillMaxWidth(),horizontal=true) { tab=i } }
                 }
                 Column(Modifier.weight(1f)) {
-                    if(!wide && !keyboardVisible) Row(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically) {
-                        Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(28.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text("Panelin",fontWeight=FontWeight.SemiBold,fontSize=18.sp,color=Ink,modifier=Modifier.weight(1f))
+                    if(!wide && !keyboardVisible) Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(22.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Panelin",fontWeight=FontWeight.SemiBold,fontSize=14.sp,color=Ink,modifier=Modifier.weight(1f))
                     }
+                    if(busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp).testTag("busy-progress"),color=Blue,trackColor=Line)
                     AnimatedContent(targetState=tab,transitionSpec={ fadeIn() togetherWith fadeOut() },label="page",modifier=Modifier.weight(1f)) { page ->
-                        Box(Modifier.fillMaxSize(),contentAlignment=Alignment.TopCenter) {
-                            LazyColumn(Modifier.widthIn(max=760.dp).fillMaxWidth().imePadding().testTag("page-content"),contentPadding=PaddingValues(if(config.screenWidthDp<360) 16.dp else 24.dp,if(wide) 32.dp else 8.dp,if(config.screenWidthDp<360) 16.dp else 24.dp,24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-                                item { Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                                    Text(titles[page],fontSize=30.sp,lineHeight=36.sp,letterSpacing=(-.7).sp,fontWeight=FontWeight.Bold,color=Ink,modifier=Modifier.semantics { heading() })
-                                    Text(subtitles[page],color=Muted,fontSize=14.sp)
-                                } }
+                        val pullState = rememberPullToRefreshState()
+                        PullToRefreshBox(isRefreshing=refreshing,onRefresh={ refresh(page) },state=pullState,modifier=Modifier.fillMaxSize().testTag("refresh-$page").semantics { this[RefreshGeneration]=refreshCount },contentAlignment=Alignment.TopCenter) {
+                            LazyColumn(Modifier.widthIn(max=760.dp).fillMaxSize().imePadding().testTag("page-content"),contentPadding=PaddingValues(horizontal=16.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                                item { Text(titles[page],fontSize=22.sp,lineHeight=28.sp,fontWeight=FontWeight.SemiBold,color=Ink,modifier=Modifier.semantics { heading() }) }
+                                if(initialLoading) item { InitialSkeleton() }
+                                if(page==2 && appsLoading && !initialLoading) item { InitialSkeleton() }
                                 if(loadFailed) item { PanelCard { Badge("Penyimpanan belum terbaca",Amber); Copy("Status belum dapat dipastikan. Data tidak dihapus."); Action("Coba lagi") { lifecycleScope.launch { reload() } } } }
-                                when(page) {
+                                if(!initialLoading) when(page) {
                                     0 -> {
-                                        item { val ready=loaded && enabled && listener.first && listener.second && destinations.any { it.enabled }
-                                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Brush.linearGradient(listOf(Color(0xFF006975),Color(0xFF0753A0)))).testTag("payment-overview").padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-                                                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                                                    Glyph(6,Color.White)
-                                                    Text(if(ready) "Aktif" else if(loadFailed) "Status belum tersedia" else if(!loaded) "Memuat status" else "Perlu penyiapan",color=Color.White,fontSize=13.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha=.18f)).padding(12.dp,8.dp))
-                                                }
-                                                Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-                                                    Text("Diterima hari ini",color=Color.White,fontSize=14.sp)
-                                                    Text(snapshot?.todayCount?.toString()?:"—",color=Color.White,fontSize=56.sp,lineHeight=64.sp,fontWeight=FontWeight.Bold,letterSpacing=(-2).sp)
-                                                    Text("Notifikasi dari sumber pilihan",color=Color.White,fontSize=13.sp,lineHeight=19.sp)
-                                                }
-                                                HorizontalDivider(color=Color.White.copy(alpha=.22f))
-                                                Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                                                    Text(when { !loaded -> "Status belum tersedia"; !enabled -> "Penerusan dijeda"; !listener.first -> "Izinkan akses notifikasi"; !listener.second -> "Menghubungkan ke Android"; !ready -> "Pilih aplikasi pembayaran"; else -> "Siap menerima notifikasi" },color=Color.White,fontSize=19.sp,lineHeight=26.sp,fontWeight=FontWeight.SemiBold)
-                                                    Text(if(!loaded) "Ringkasan belum dapat dipastikan." else "${destinations.count { it.enabled }} aplikasi aktif dari ${destinations.size} terhubung",color=Color.White,fontSize=13.sp,lineHeight=20.sp)
-                                                    Text("Jumlah notifikasi, bukan saldo. Hasil pengiriman dan kredit saldo ada di Riwayat.",color=Color.White,fontSize=12.sp,lineHeight=18.sp)
-                                                }
+                                        item { Column(Modifier.testTag("payment-overview")) { PanelCard {
+                                            val ready=loaded && enabled && listener.first && listener.second && destinations.any { it.enabled }
+                                            Row(Modifier.fillMaxWidth().testTag("monitoring-status"),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                                Box(Modifier.size(8.dp).background(if(ready) Green else Amber,RoundedCornerShape(50)))
+                                                Text(when { !loaded -> "Status belum tersedia"; !enabled -> "Penerusan dijeda"; !listener.first -> "Izinkan akses di Pengaturan"; !listener.second -> "Menghubungkan ke Android"; !ready -> "Pilih sumber di Aplikasi"; else -> "Pemantauan aktif" },color=Ink,fontSize=14.sp,fontWeight=FontWeight.Medium,modifier=Modifier.weight(1f))
                                             }
-                                        }
-                                        item { PanelCard {
-                                            Section("Akses cepat")
-                                            val compact=config.screenWidthDp<360 || fontScale>1.4f
-                                            Column(Modifier.testTag("quick-actions"),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-                                                listOf(0,1,2,3).chunked(if(compact) 2 else 4).forEach { group ->
-                                                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                                                        group.forEach { i ->
-                                                            Shortcut(listOf(2,1,6,3)[i],listOf("Kelola aplikasi","Lihat riwayat","Akses notifikasi","Atur perangkat")[i],Modifier.weight(1f)) {
-                                                                when(i) { 0->tab=2; 1->tab=1; 2->privacyGate { openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }; else->tab=3 }
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                                                Text(snapshot?.todayCount?.toString()?:"—",color=Ink,fontSize=28.sp,lineHeight=34.sp,fontWeight=FontWeight.SemiBold)
+                                                Copy("Diterima hari ini")
                                             }
-                                        } }
-                                        item { PanelCard {
+                                            Copy("Jumlah notifikasi, bukan saldo. Hasil kredit ada di Riwayat.")
+                                            HorizontalDivider(color=Line)
+                                            KeyValue("Dalam antrean",snapshot?.queuedCount?.toString()?:"—")
+                                            KeyValue("Perlu perhatian",snapshot?.attentionCount?.toString()?:"—")
+                                            KeyValue("Terakhir diterima",time(snapshot?.lastReceivedAt?:0))
+                                            KeyValue("Terakhir dikirim",time(snapshot?.lastSentAt?:0))
+                                        } } }
+                                        item { Column(Modifier.testTag("quick-actions")) { PanelCard {
                                             ToggleRow("Penerusan notifikasi",enabled,loaded && !busy) { value ->
                                                 if(value && !acknowledged) privacyGate { }
                                                 else if(value && destinations.none { it.enabled }) { tab=2; notice="Hubungkan dan aktifkan satu aplikasi terlebih dahulu." }
                                                 else mutate({ store.enabled=value; if(value) Forwarding.reconnect(applicationContext) })
                                             }
-                                        } }
+                                        } } }
                                         if(!acknowledged) item { PanelCard { Section("Sebelum memulai"); Copy("Izin Android mencakup semua notifikasi. Panelin hanya meneruskan sumber yang Anda pilih ke website Anda. Isinya bisa memuat data pribadi."); Action("Baca privasi",false) { info="Privasi" to HelpText.Privacy }; Action("Saya mengerti") { acceptPrivacy() } } }
-                                        item { val compact=config.screenWidthDp<360 || fontScale>1.4f
-                                            if(compact) Column(verticalArrangement=Arrangement.spacedBy(12.dp)) { Metric("Dalam antrean",snapshot?.queuedCount); Metric("Kredit tercatat",snapshot?.creditedCount) }
-                                            else Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) { Box(Modifier.weight(1f)) { Metric("Dalam antrean",snapshot?.queuedCount) }; Box(Modifier.weight(1f)) { Metric("Kredit tercatat",snapshot?.creditedCount) } }
-                                        }
-                                        item { PanelCard { Section("Aktivitas perangkat"); KeyValue("Dalam antrean",snapshot?.queuedCount?.toString()?:"—"); KeyValue("Perlu perhatian",snapshot?.attentionCount?.toString()?:"—"); KeyValue("Terakhir diterima",time(snapshot?.lastReceivedAt?:0)); KeyValue("Terakhir dikirim",time(snapshot?.lastSentAt?:0)); Copy("Kredit tercatat dihitung dari riwayat tersimpan, bukan saldo website. Status Dikreditkan berarti website mengonfirmasi kredit saldo.") } }
-                                        item { PanelCard { Section("Persiapan perangkat")
-                                            SettingRow(6,"Akses notifikasi",if(listener.first) "Diizinkan Android" else "Wajib untuk membaca sumber pilihan") { privacyGate { openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
-                                            SettingRow(7,"Notifikasi status",if(postAllowed) "Diizinkan" else "Izinkan penanda status aplikasi") { if(Build.VERSION.SDK_INT>=33 && !postAllowed) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),41) else openSettings(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName)) }
-                                            SettingRow(3,"Pengaturan baterai",if(batteryFree) "Dikecualikan dari optimasi" else "Tinjau pembatasan latar belakang") { openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
-                                            Action("Sambungkan ulang",false) { Forwarding.reconnect(applicationContext); notice="Meminta Android menyambungkan ulang. Periksa status di Beranda." }
-                                        } }
-                                        item { Action("Kelola aplikasi") { tab=2 } }
                                     }
                                     1 -> {
-                                        item { Action(historyFilters[filter]+"   ⌄",false,tag="history-filter") { filterOpen=true } }
+                                        item { FilterSelect(historyFilters[filter]) { filterOpen=true } }
                                         val selected=deliveries.filter { when(filter) { 1->queued(it); 2->attention(it); 3->it.outcome=="credited"; 4->it.state=="skipped"; else->true } }
                                         if(selected.isEmpty()) item { Empty("Belum ada aktivitas","Notifikasi dari aplikasi aktif akan muncul di sini.",1) }
-                                        items(selected,key={it.id}) { d -> PanelCard { Row(verticalAlignment=Alignment.CenterVertically) { Glyph(1,Blue); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Section(d.appLabel.ifBlank { d.packageName }); Text(time(d.createdAt),color=Muted,fontSize=12.sp) } }; Badge(deliveryLabel(d),if(d.outcome=="credited") Green else if(attention(d)) Amber else Blue); Copy(if(d.state=="skipped") "Tidak dikirim ke website" else "${d.attempts} percobaan · Isi notifikasi disembunyikan"); Action("Lihat detail",false) { detail=d } } }
+                                        items(selected,key={it.id}) { d -> PanelCard { Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) { AppIcon(d.packageName,d.appLabel); Column(Modifier.weight(1f)) { Section(d.appLabel.ifBlank { d.packageName }); Text(time(d.createdAt),color=Muted,fontSize=12.sp) } }; Badge(deliveryLabel(d),if(d.outcome=="credited") Green else if(attention(d)) Amber else Blue); Copy(if(d.state=="skipped") "Tidak dikirim ke website" else "${d.attempts} percobaan · Isi notifikasi disembunyikan"); Action("Lihat detail",false) { detail=d } } }
                                         if(deliveries.size>=150) item { Copy("Menampilkan hingga 150 pembayaran dan 150 aktivitas lokal.") }
-                                        item { Action("Muat ulang",false) { lifecycleScope.launch { reload() } } }
+
                                     }
                                     2 -> {
                                         item { PanelCard { Badge("${destinations.count { it.enabled }} aktif · ${destinations.size} terhubung",Blue); Copy("Atur URL dan token untuk setiap aplikasi pembayaran.") } }
                                         item { Field(query,{query=it},"Cari nama aplikasi atau paket",tag="app-search") }
                                         if(appsFailed) item { PanelCard { Copy("Daftar aplikasi belum dapat dibaca."); Action("Coba muat aplikasi",false) { lifecycleScope.launch { loadApps() } } } }
                                         val merged=(apps+destinations.filter { d->apps.none { it.pkg==d.packageName } }.map { SourceApp(it.packageName,it.label) }).sortedWith(compareByDescending<SourceApp> { a->destinations.any { it.packageName==a.pkg } }.thenBy { it.label.lowercase() }).filter { it.label.contains(query,true)||it.pkg.contains(query,true) }
-                                        if(merged.isEmpty() && !appsFailed) item { Empty("Tidak ada aplikasi ditemukan","Coba nama lain. Daftar mengikuti aplikasi yang bisa ditampilkan Android.",2) }
+                                        if(merged.isEmpty() && !appsFailed && !appsLoading) item { Empty("Tidak ada aplikasi ditemukan","Coba nama lain. Daftar mengikuti aplikasi yang bisa ditampilkan Android.",2) }
                                         items(merged,key={it.pkg}) { app -> val configured=destinations.find { it.packageName==app.pkg }
-                                            PanelCard { Row(verticalAlignment=Alignment.CenterVertically) { if(app.icon!=null) Image(app.icon.asImageBitmap(),null,Modifier.size(46.dp).clip(RoundedCornerShape(14.dp))) else Glyph(2,Blue,Modifier.size(44.dp)); Spacer(Modifier.width(14.dp)); Column(Modifier.weight(1f)) { Section(app.label); Text(app.pkg,color=Muted,fontSize=11.sp) } }; Badge(if(configured==null) "Belum diatur" else if(configured.enabled) "Aktif" else "Dijeda",if(configured?.enabled==true) Green else Muted); Action(if(configured==null) "Hubungkan aplikasi" else "Kelola tujuan",false) { privacyGate { editing=app } } }
+                                            PanelCard { Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) { AppIcon(app.pkg,app.label); Column(Modifier.weight(1f)) { Section(app.label); Text(app.pkg,color=Muted,fontSize=12.sp); Text(if(configured==null) "Belum diatur" else if(configured.enabled) "Aktif" else "Dijeda",color=if(configured?.enabled==true) Green else Muted,fontSize=12.sp) } }; Action(if(configured==null) "Hubungkan aplikasi" else "Kelola tujuan",false) { privacyGate { editing=app } } }
                                         }
                                     }
                                     3 -> {
-                                        item { PanelCard { Row(verticalAlignment=Alignment.CenterVertically) { Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(48.dp).padding(6.dp)); Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { Section("Panelin Notifikasi"); Copy("Versi ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") } }; Copy("Notifikasi langsung ke website Anda, tanpa server perantara atau pelacakan.") } }
+                                        item { PanelCard { Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) { Image(painterResource(R.drawable.panelin_logo),null,Modifier.size(32.dp)); Column(Modifier.weight(1f)) { Section("Panelin Notifikasi"); Copy("Versi ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})") } }; Copy("Langsung ke website Anda, tanpa server perantara atau pelacakan.") } }
+                                        item { PanelCard { UpdateSettings(updater) } }
                                         item { Section("Privasi dan data") }
                                         item { PanelCard { SettingRow(6,"Privasi","Akses, tujuan, dan batas pemrosesan") { info="Privasi" to HelpText.Privacy }; SettingRow(1,"Hapus riwayat selesai","Antrean tertunda tetap tersimpan",true) { confirmation="Hapus riwayat selesai di HP ini? Antrean tertunda dan data website tetap ada." to { mutate({store.clearHistory()}) { notice="Riwayat selesai dihapus. Antrean tetap ada." } } } } }
                                         item { Section("Perangkat") }
-                                        item { PanelCard { SettingRow(7,"Optimasi baterai",if(batteryFree) "Dikecualikan Android" else "Tinjau pembatasan baterai") { openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }; SettingRow(3,"Aktivitas latar belakang","Panduan sesuai merek HP") { info="Aktivitas latar belakang" to HelpText.Oem }; SettingRow(2,"Info aplikasi di Android","Izin, baterai, dan penyimpanan") { openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:$packageName"))) } } }
+                                        item { PanelCard {
+                                            SettingRow(6,"Akses notifikasi",if(listener.first) "Diizinkan Android" else "Wajib untuk membaca sumber pilihan") { privacyGate { openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } }
+                                            SettingRow(7,"Notifikasi status",if(postAllowed) "Diizinkan" else "Izinkan penanda status aplikasi") { if(Build.VERSION.SDK_INT>=33 && !postAllowed) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS),41) else openSettings(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName)) }
+                                            SettingRow(3,"Optimasi baterai",if(batteryFree) "Dikecualikan Android" else "Tinjau pembatasan baterai") { openSettings(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                                            SettingRow(3,"Aktivitas latar belakang","Panduan sesuai merek HP") { info="Aktivitas latar belakang" to HelpText.Oem }
+                                            SettingRow(2,"Info aplikasi di Android","Izin, baterai, dan penyimpanan") { openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:$packageName"))) }
+                                            Action("Sambungkan ulang",false) { Forwarding.reconnect(applicationContext); notice="Meminta Android menyambungkan ulang. Periksa status di Beranda." }
+                                        } }
                                         item { Section("Bantuan") }
                                         item { PanelCard { SettingRow(1,"Catatan pembaruan","Lihat perubahan tiap versi") { changelog() }; SettingRow(6,"Bantuan penyiapan","Hubungkan sumber ke website Anda") { info="Bantuan penyiapan" to HelpText.Setup } } }
                                     }
@@ -305,8 +317,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        UpdatePrompt(updater)
         if(filterOpen) Sheet("Filter aktivitas",{filterOpen=false}) {
-            historyFilters.forEachIndexed { i,value -> Action(value+(if(i==filter) "  ✓" else ""),i==filter) { filter=i;filterOpen=false } }
+            Column(Modifier.selectableGroup(),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                historyFilters.forEachIndexed { i,value -> FilterChoice(value,i==filter) { filter=i;filterOpen=false } }
+            }
         }
         if(privacyPrompt) Sheet("Persetujuan akses notifikasi",{privacyPrompt=false;privacyAction=null}) {
             Copy("Izin Android mencakup semua notifikasi. Panelin hanya membaca sumber yang Anda pilih dan aktifkan. Nama paket, judul, teks, dan teks panjang dikirim ke URL HTTPS Anda. Data ini bisa bersifat pribadi. Setiap tujuan memerlukan persetujuan. Tidak ada tujuan bawaan atau pengiriman uji.")
@@ -317,10 +332,9 @@ class MainActivity : ComponentActivity() {
             val d = deliveries.find { it.id==selected.id } ?: selected
             Sheet(d.appLabel.ifBlank { "Detail aktivitas" },{detail=null}) {
                 DeliveryDetails(d)
-                Action("Tutup") { detail=null }
             }
         }
-        info?.let { (title,text) -> Sheet(title,{info=null}) { Text(text,color=Ink,fontSize=15.sp,lineHeight=23.sp); Action("Mengerti") { info=null } } }
+        info?.let { (title,text) -> Sheet(title,{info=null},closeLabel="Mengerti") { Text(text,color=Ink,fontSize=15.sp,lineHeight=23.sp) } }
         confirmation?.let { (text,action) -> Sheet("Konfirmasi penghapusan",{if(!busy)confirmation=null},canDismiss=!busy) { Copy(text); Action("Hapus",enabled=!busy) { action();confirmation=null }; Action("Batal",false,enabled=!busy) { confirmation=null } } }
     }
 
@@ -337,6 +351,7 @@ class MainActivity : ComponentActivity() {
             return error==null
         }
         Sheet(app.label,{if(!busy) { token="";editing=null }},canDismiss=!busy) {
+            AppIcon(app.pkg,app.label)
             Copy(app.pkg)
             Field(endpoint,{endpoint=it;validation=""},"URL webhook",keyboard=KeyboardType.Uri,tag="endpoint")
             Field(token,{token=it;validation=""},"Token webhook",secret=true,tag="token")
@@ -368,6 +383,7 @@ class MainActivity : ComponentActivity() {
 }
 @Composable internal fun DeliveryDetails(d: Delivery) {
     var reveal by remember(d.id) { mutableStateOf(false) }
+    AppIcon(d.packageName,d.appLabel)
     Badge(deliveryLabel(d),Blue)
     Copy("${d.packageName}\n${time(d.createdAt)}\n${d.attempts} percobaan")
     KeyValue("ID korelasi",d.id.toString())
@@ -394,72 +410,102 @@ class MainActivity : ComponentActivity() {
 }
 @Composable internal fun Action(text: String,primary: Boolean=true,enabled: Boolean=true,tag: String="",click: ()->Unit) {
     val bg by animateColorAsState(if(primary) Blue else Canvas,label="button")
-    Surface(onClick=click,enabled=enabled,shape=RoundedCornerShape(12.dp),color=if(enabled) bg else Line,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp).testTag(tag).semantics { role=Role.Button }) {
-        Text(text,color=if(!enabled) Muted else if(primary) (if(isSystemInDarkTheme()) Color.Black else Color.White) else Blue,fontWeight=FontWeight.SemiBold,fontSize=14.sp,modifier=Modifier.padding(16.dp),textAlign=androidx.compose.ui.text.style.TextAlign.Center)
+    Surface(onClick=click,enabled=enabled,shape=RoundedCornerShape(10.dp),color=if(enabled) bg else Line,modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag(tag).semantics { role=Role.Button }) {
+        Box(Modifier.padding(horizontal=12.dp,vertical=10.dp),contentAlignment=Alignment.Center) { Text(text,color=if(!enabled) Muted else if(primary) (if(isSystemInDarkTheme()) Color.Black else Color.White) else Blue,fontWeight=FontWeight.Medium,fontSize=14.sp,textAlign=androidx.compose.ui.text.style.TextAlign.Center) }
     }
 }
 @Composable internal fun PanelCard(content: @Composable ColumnScope.()->Unit) {
-    Surface(shape=Round,color=Paper,modifier=Modifier.fillMaxWidth().animateContentSize()) { Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(14.dp),content=content) }
+    Surface(shape=Round,color=Paper,border=BorderStroke(1.dp,Line),modifier=Modifier.fillMaxWidth().animateContentSize()) { Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp),content=content) }
 }
-@Composable private fun Section(text: String) { Text(text,color=Ink,fontSize=17.sp,lineHeight=24.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.semantics { heading() }) }
+@Composable private fun Section(text: String) { Text(text,color=Ink,fontSize=15.sp,lineHeight=21.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.semantics { heading() }) }
 @Composable private fun Copy(text: String) { Text(text,color=Muted,fontSize=14.sp,lineHeight=21.sp) }
-@Composable private fun Badge(text: String,color: Color) { Text(text,color=color,fontSize=12.sp,fontWeight=FontWeight.Medium,modifier=Modifier.clip(RoundedCornerShape(8.dp)).background(color.copy(alpha=.08f)).padding(10.dp,7.dp)) }
-@Composable private fun Metric(label: String,value: Int?) { PanelCard { Copy(label); Text(value?.toString()?:"—",fontSize=34.sp,color=Ink,fontWeight=FontWeight.Bold) } }
+@Composable private fun Badge(text: String,color: Color) { Text(text,color=color,fontSize=12.sp,fontWeight=FontWeight.Medium,modifier=Modifier.clip(RoundedCornerShape(6.dp)).background(color.copy(alpha=.08f)).padding(8.dp,4.dp)) }
 @Composable private fun KeyValue(key: String,value: String) { Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) { Text(key,color=Muted,fontSize=13.sp,modifier=Modifier.weight(1f)); Text(value,color=Ink,fontSize=13.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f),textAlign=androidx.compose.ui.text.style.TextAlign.End) } }
 @Composable internal fun ToggleRow(title: String,checked: Boolean,enabled: Boolean=true,change: (Boolean)->Unit) {
     val position by animateFloatAsState(if(checked) 1f else 0f,label="toggle")
-    val color by animateColorAsState(if(checked) (if(isSystemInDarkTheme()) Color(0xFF30A45A) else Color(0xFF278546)) else Line,label="track")
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Canvas).toggleableCompat(checked,enabled,Role.Switch,change).padding(14.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+    val color by animateColorAsState(if(checked) Blue else Line,label="track")
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Canvas).toggleableCompat(checked,enabled,Role.Switch,change).heightIn(min=48.dp).padding(10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
         Text(title,color=if(enabled) Ink else Muted,fontSize=14.sp,fontWeight=FontWeight.Medium,modifier=Modifier.weight(1f))
-        Box(Modifier.size(51.dp,31.dp).clip(RoundedCornerShape(50)).background(if(enabled) color else Line)) {
-            Box(Modifier.padding(3.dp).offset(x=(20*position).dp).size(25.dp).background(Color.White,RoundedCornerShape(50)))
+        Box(Modifier.size(40.dp,24.dp).clip(RoundedCornerShape(50)).background(if(enabled) color else Line)) {
+            Box(Modifier.padding(3.dp).offset(x=(16*position).dp).size(18.dp).background(Color.White,RoundedCornerShape(50)))
         }
     }
 }
 private fun Modifier.toggleableCompat(checked: Boolean,enabled: Boolean,role: Role,change: (Boolean)->Unit): Modifier = this.then(Modifier.toggleable(checked,enabled=enabled,role=role,onValueChange=change))
 @Composable internal fun CheckRow(title: String,checked: Boolean,enabled: Boolean=true,change: (Boolean)->Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Canvas).toggleableCompat(checked,enabled,Role.Checkbox,change).padding(14.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Canvas).toggleableCompat(checked,enabled,Role.Checkbox,change).heightIn(min=48.dp).padding(12.dp),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(24.dp).clip(RoundedCornerShape(7.dp)).background(if(checked) Blue else Paper).border(1.dp,if(checked) Blue else Muted,RoundedCornerShape(7.dp)),contentAlignment=Alignment.Center) { if(checked) Glyph(8,MaterialTheme.colorScheme.onPrimary,Modifier.size(17.dp)) }
         Text(title,color=Ink,fontSize=13.sp,lineHeight=20.sp,modifier=Modifier.weight(1f))
     }
 }
 @Composable private fun Field(value: String,change: (String)->Unit,label: String,secret: Boolean=false,keyboard: KeyboardType=KeyboardType.Text,tag: String="") {
-    OutlinedTextField(value,onValueChange=change,label={Text(label,fontSize=14.sp)},textStyle=androidx.compose.ui.text.TextStyle(fontSize=16.sp,color=Ink),singleLine=true,shape=RoundedCornerShape(16.dp),visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None,keyboardOptions=KeyboardOptions(keyboardType=if(secret) KeyboardType.Password else keyboard,autoCorrectEnabled=false),modifier=Modifier.fillMaxWidth().testTag(tag),colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Line,focusedBorderColor=Blue,unfocusedContainerColor=Paper,focusedContainerColor=Paper,unfocusedTextColor=Ink,focusedTextColor=Ink,unfocusedLabelColor=Muted,focusedLabelColor=Blue))
+    OutlinedTextField(value,onValueChange=change,label={Text(label,fontSize=14.sp)},textStyle=androidx.compose.ui.text.TextStyle(fontSize=16.sp,color=Ink),singleLine=true,shape=RoundedCornerShape(10.dp),visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None,keyboardOptions=KeyboardOptions(keyboardType=if(secret) KeyboardType.Password else keyboard,autoCorrectEnabled=false),modifier=Modifier.fillMaxWidth().testTag(tag),colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Line,focusedBorderColor=Blue,unfocusedContainerColor=Paper,focusedContainerColor=Paper,unfocusedTextColor=Ink,focusedTextColor=Ink,unfocusedLabelColor=Muted,focusedLabelColor=Blue))
 }
 @Composable private fun SettingRow(icon: Int,title: String,detail: String,danger: Boolean=false,click: ()->Unit) {
-    Surface(onClick=click,color=Color.Transparent,shape=RoundedCornerShape(14.dp),modifier=Modifier.semantics { role=Role.Button }) {
-        Row(Modifier.fillMaxWidth().padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background((if(danger) Amber else Blue).copy(alpha=.07f)),contentAlignment=Alignment.Center) { Glyph(icon,if(danger) Amber else Blue) }
-            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) { Text(title,color=if(danger) Amber else Ink,fontSize=14.sp,fontWeight=FontWeight.Medium); Copy(detail) }; Glyph(4,Muted,Modifier.size(16.dp))
+    Surface(onClick=click,color=Color.Transparent,shape=RoundedCornerShape(10.dp),modifier=Modifier.heightIn(min=48.dp).semantics { role=Role.Button }) {
+        Row(Modifier.fillMaxWidth().padding(vertical=6.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background((if(danger) Amber else Blue).copy(alpha=.07f)),contentAlignment=Alignment.Center) { Glyph(icon,if(danger) Amber else Blue,Modifier.size(18.dp)) }
+            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)) { Text(title,color=if(danger) Amber else Ink,fontSize=14.sp,fontWeight=FontWeight.Medium); Text(detail,color=Muted,fontSize=13.sp,lineHeight=19.sp) }; Glyph(4,Muted,Modifier.size(14.dp))
         }
     }
 }
-@Composable private fun Empty(title: String,description: String,icon: Int) { PanelCard { Column(Modifier.fillMaxWidth().padding(vertical=18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(16.dp)) { Box(Modifier.size(58.dp).clip(RoundedCornerShape(18.dp)).background(Blue.copy(alpha=.07f)),contentAlignment=Alignment.Center) { Glyph(icon,Blue) }; Section(title); Text(description,color=Muted,fontSize=13.sp,lineHeight=21.sp,textAlign=androidx.compose.ui.text.style.TextAlign.Center) } } }
-@Composable private fun Shortcut(icon: Int,title: String,modifier: Modifier,click: ()->Unit) {
-    val tint=when(icon) { 1->if(isSystemInDarkTheme()) Color(0xFFADBBFF) else Color(0xFF505CB2); 6->Green; 3->Amber; else->Blue }
-    Surface(onClick=click,color=Color.Transparent,shape=RoundedCornerShape(16.dp),modifier=modifier.heightIn(min=48.dp).semantics { role=Role.Button }) {
-        Column(Modifier.padding(vertical=8.dp,horizontal=2.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha=.12f)),contentAlignment=Alignment.Center) { Glyph(icon,tint) }
-            Text(title,color=Ink,fontSize=12.sp,lineHeight=17.sp,fontWeight=FontWeight.Medium,textAlign=androidx.compose.ui.text.style.TextAlign.Center)
+@Composable private fun Empty(title: String,description: String,icon: Int) { PanelCard { Column(Modifier.fillMaxWidth().padding(vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(10.dp)) { Box(Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Blue.copy(alpha=.07f)),contentAlignment=Alignment.Center) { Glyph(icon,Blue) }; Section(title); Text(description,color=Muted,fontSize=13.sp,lineHeight=21.sp,textAlign=androidx.compose.ui.text.style.TextAlign.Center) } } }
+@Composable internal fun AppIcon(pkg: String,label: String) {
+    val context = LocalContext.current.applicationContext
+    val result by produceState(iconCache.get(pkg),pkg) {
+        if(value==null) value=withContext(Dispatchers.IO) {
+            val resolved=PackageIcon(runCatching { context.packageManager.getApplicationIcon(pkg).toBitmap(72,72) }.getOrNull())
+            iconCache.put(pkg,resolved)
+            resolved
+        }
+    }
+    Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Canvas).testTag("app-icon-$pkg").semantics {
+        stateDescription=if(result==null) "Memuat ikon" else if(result?.bitmap!=null) "Ikon aplikasi" else "Inisial aplikasi"
+    },contentAlignment=Alignment.Center) {
+        val bitmap=result?.bitmap
+        if(bitmap!=null) Image(bitmap.asImageBitmap(),null,Modifier.fillMaxSize())
+        else Text(label.trim().firstOrNull()?.uppercase()?:"•",color=Muted,fontSize=14.sp,fontWeight=FontWeight.Medium)
+    }
+}
+@Composable private fun InitialSkeleton() {
+    PanelCard {
+        Column(Modifier.fillMaxWidth().testTag("initial-skeleton").semantics { contentDescription="Memuat data lokal" },verticalArrangement=Arrangement.spacedBy(10.dp)) {
+            for(width in listOf(.5f,1f,.75f)) Box(Modifier.fillMaxWidth(width).height(14.dp).background(Line,RoundedCornerShape(4.dp)))
+        }
+    }
+}
+@Composable private fun FilterSelect(value: String,click: ()->Unit) {
+    Surface(onClick=click,shape=RoundedCornerShape(10.dp),color=Paper,border=BorderStroke(1.dp,Line),modifier=Modifier.fillMaxWidth().heightIn(min=48.dp).testTag("history-filter").semantics { role=Role.Button; stateDescription=value }) {
+        Row(Modifier.padding(horizontal=12.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Text(value,color=Ink,fontSize=14.sp,fontWeight=FontWeight.Medium,modifier=Modifier.weight(1f))
+            Text("⌄",color=Blue,fontSize=16.sp)
+        }
+    }
+}
+@Composable private fun FilterChoice(value: String,selected: Boolean,click: ()->Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if(selected) Blue.copy(alpha=.1f) else Color.Transparent).selectable(selected=selected,role=Role.RadioButton,onClick=click).heightIn(min=48.dp).padding(horizontal=12.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+        Text(value,color=if(selected) Blue else Ink,fontSize=14.sp,fontWeight=if(selected) FontWeight.Medium else FontWeight.Normal,modifier=Modifier.weight(1f))
+        Box(Modifier.size(18.dp).border(1.dp,if(selected) Blue else Muted,RoundedCornerShape(50)),contentAlignment=Alignment.Center) {
+            if(selected) Box(Modifier.size(8.dp).background(Blue,RoundedCornerShape(50)))
         }
     }
 }
 @Composable private fun NavItem(index: Int,title: String,selected: Boolean,modifier: Modifier,horizontal: Boolean=false,click: ()->Unit) {
     val bg by animateColorAsState(if(selected) Blue.copy(alpha=.14f) else Color.Transparent,label="nav")
-    val style = modifier.clip(RoundedCornerShape(16.dp)).background(if(horizontal) bg else Color.Transparent).selectableCompat(selected,click).heightIn(min=48.dp).padding(8.dp,8.dp)
+    val style = modifier.clip(RoundedCornerShape(10.dp)).background(if(horizontal) bg else Color.Transparent).selectableCompat(selected,click).heightIn(min=48.dp).padding(6.dp,6.dp)
     val color = if(selected) Blue else Muted
     if(horizontal) Row(style,verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         Glyph(index,color)
         Text(title,color=color,fontSize=14.sp,fontWeight=if(selected) FontWeight.SemiBold else FontWeight.Normal,modifier=Modifier.weight(1f))
     } else Column(style,horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(4.dp)) {
-        Box(Modifier.width(56.dp).height(32.dp).clip(RoundedCornerShape(50)).background(bg),contentAlignment=Alignment.Center) { Glyph(index,color) }
+        Box(Modifier.width(40.dp).height(24.dp).clip(RoundedCornerShape(8.dp)).background(bg),contentAlignment=Alignment.Center) { Glyph(index,color) }
         Text(title,color=if(selected) Ink else Muted,fontSize=11.sp,lineHeight=15.sp,fontWeight=if(selected) FontWeight.SemiBold else FontWeight.Normal,textAlign=androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 private fun Modifier.selectableCompat(selected: Boolean,click: ()->Unit) = this.then(Modifier.selectable(selected,role=Role.Tab,onClick=click))
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun Sheet(title: String,dismiss: ()->Unit,canDismiss: Boolean=true,content: @Composable ColumnScope.()->Unit) {
-    ModalBottomSheet(onDismissRequest=dismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true,confirmValueChange={ it != SheetValue.Hidden || canDismiss }),containerColor=Paper,shape=RoundedCornerShape(topStart=24.dp,topEnd=24.dp),sheetMaxWidth=560.dp,properties=ModalBottomSheetProperties(securePolicy=androidx.compose.ui.window.SecureFlagPolicy.SecureOn)) {
+@Composable private fun Sheet(title: String,dismiss: ()->Unit,canDismiss: Boolean=true,closeLabel: String="Tutup",content: @Composable ColumnScope.()->Unit) {
+    ModalBottomSheet(onDismissRequest=dismiss,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true,confirmValueChange={ it != SheetValue.Hidden || canDismiss }),containerColor=Paper,shape=RoundedCornerShape(topStart=16.dp,topEnd=16.dp),sheetMaxWidth=560.dp,properties=ModalBottomSheetProperties(securePolicy=androidx.compose.ui.window.SecureFlagPolicy.SecureOn)) {
         val view = androidx.compose.ui.platform.LocalView.current
         DisposableEffect(view) {
             view.rootView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
@@ -467,13 +513,13 @@ private fun Modifier.selectableCompat(selected: Boolean,click: ()->Unit) = this.
             view.isSaveEnabled = false
             onDispose { }
         }
-        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(22.dp,0.dp,22.dp,28.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-            Row(verticalAlignment=Alignment.CenterVertically) { Text(title,color=Ink,fontSize=22.sp,lineHeight=28.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f).semantics { heading() }); TextButton(onClick=dismiss,enabled=canDismiss) { Text("Tutup",color=Blue) } }
+        Column(Modifier.fillMaxWidth().imePadding().verticalScroll(rememberScrollState()).padding(16.dp,0.dp,16.dp,20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically) { Text(title,color=Ink,fontSize=18.sp,lineHeight=24.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.weight(1f).semantics { heading() }); TextButton(onClick=dismiss,enabled=canDismiss) { Text(closeLabel,color=Blue) } }
             content()
         }
     }
 }
-@Composable private fun Glyph(kind: Int,color: Color,modifier: Modifier=Modifier.size(24.dp)) {
+@Composable private fun Glyph(kind: Int,color: Color,modifier: Modifier=Modifier.size(20.dp)) {
     val vector=remember(kind) { ImageVector.Builder("panelin-$kind",24.dp,24.dp,24f,24f).apply { path(stroke=androidx.compose.ui.graphics.SolidColor(Color.Black),strokeLineWidth=1.8f,strokeLineCap=androidx.compose.ui.graphics.StrokeCap.Round,strokeLineJoin=androidx.compose.ui.graphics.StrokeJoin.Round) {
         when(kind) {
             0->{moveTo(3f,10f);lineTo(12f,3f);lineTo(21f,10f);moveTo(5f,9f);lineTo(5f,21f);lineTo(10f,21f);lineTo(10f,14f);lineTo(14f,14f);lineTo(14f,21f);lineTo(19f,21f);lineTo(19f,9f)}

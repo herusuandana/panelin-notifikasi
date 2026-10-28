@@ -27,7 +27,7 @@ assert f'versionName={version}' in package, 'Installed release does not match cu
 run('shell', 'am', 'start', '-W', '-n', 'id.panelin.notifikasi/.MainActivity')
 
 expected = {'Riwayat': 'Riwayat pengiriman', 'Aplikasi': 'Aplikasi terhubung',
-            'Pengaturan': 'Izin perangkat, privasi, dan bantuan.', 'Beranda': 'Notifikasi pembayaran'}
+            'Pengaturan': 'Pengaturan aplikasi', 'Beranda': 'Notifikasi pembayaran'}
 for tab, heading in expected.items():
     nodes = [node for node in tree().iter('node') if node.attrib.get('text') == tab]
     assert nodes, f'Missing navigation: {tab}'

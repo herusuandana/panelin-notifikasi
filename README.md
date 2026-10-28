@@ -1,85 +1,81 @@
 # Panelin Notifikasi
 
-Aplikasi Android untuk pemilik/admin website **Panelin**, bukan pelanggan yang melakukan deposit. Aplikasi meneruskan notifikasi pembayaran dari HP ke webhook website untuk membantu konfirmasi deposit.
+Aplikasi Android untuk pemilik/admin website Panelin, bukan pelanggan yang deposit. Aplikasi meneruskan notifikasi pembayaran dari HP ke webhook website. Setiap client memilih sumber, URL, dan token sendiri, tanpa server perantara, iklan, atau telemetri Panelin.
 
-Setiap client memilih sumber, URL, dan token sendiri. Tidak ada endpoint bawaan, server perantara Panelin, iklan, atau telemetri terpusat.
-
-v1.5.0 tersedia sebagai prerelease untuk uji terbatas. Screenshot di bawah berasal dari APK signed v1.5.0.
+v1.6.0 (versionCode 8, 2026-10-28) adalah prerelease uji terbatas. QA runtime belum lengkap. Screenshot di bawah berasal dari APK signed v1.6.0.
 
 ## Unduh dan pasang
 
-**[Unduh APK v1.5.0 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.5.0)**
+**[Unduh APK v1.6.0 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.6.0)**
 
-Di **Assets**, pilih `panelin-notifikasi-1.5.0-release.apk`, bukan **Source code**. File `.sha256` tersedia untuk memeriksa integritas.
+Di **Assets**, pilih `panelin-notifikasi-1.6.0-release.apk`, bukan **Source code**. Periksa file `.sha256`. Minimum Android 8.0, package `id.panelin.notifikasi`, sertifikat release tetap.
 
-- Minimum Android 8.0, package `id.panelin.notifikasi`, sertifikat release tetap, bukan debug key.
-- UI native bergaya macOS/iOS dan timeline aktivitas. Jejak terenkripsi mencatat skip lokal, percobaan webhook, HTTP, hasil terpilih, dan retry tanpa respons mentah atau token.
-- Belum siap produksi. Navigasi APK signed lulus pada emulator API 26. Matriks responsif, Android 15, HP fisik, dan pembayaran hingga kredit saldo belum terverifikasi lengkap. Lihat [hasil QA](QA-RESULTS.md).
-- Versi lain tersedia di [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Aplikasi belum memiliki pembaruan otomatis.
+Belum siap produksi. Navigasi empat tab APK signed v1.6.0 lulus di API 26. Tes updater lulus setelah rerun, tetapi tes UI/editor belum seluruhnya lulus. Pemasangan update, Android 15, HP fisik, dan pembayaran hingga kredit saldo belum terverifikasi. Lihat [hasil QA](QA-RESULTS.md) dan [rilis lain](https://github.com/herusuandana/panelin-notifikasi/releases).
+
+Screenshot v1.6.0:
 
 <p>
-  <img src="docs/images/beranda.png" width="240" alt="Beranda Panelin Notifikasi dengan penjelasan privasi dan navigasi bawah">
-  <img src="docs/images/riwayat.png" width="240" alt="Riwayat pengiriman dengan filter dan keadaan kosong tanpa transaksi contoh">
+  <img src="docs/images/beranda.png" width="240" alt="Beranda Panelin Notifikasi v1.6.0">
+  <img src="docs/images/riwayat.png" width="240" alt="Riwayat Panelin Notifikasi v1.6.0 tanpa transaksi contoh">
 </p>
 
-v1.0.1 memperbaiki urutan inisialisasi window yang dapat menyebabkan crash v1.0.0 pada Android 15. Crash HP pelapor belum dikonfirmasi selesai lewat log atau uji perangkat. Pasang pembaruan **tanpa uninstall** agar konfigurasi dan antrean tetap tersimpan. Package dan sertifikat harus sama.
+Pasang pembaruan tanpa uninstall agar konfigurasi dan antrean tersimpan. Package dan sertifikat harus sama. v1.0.1 memperbaiki urutan startup, tetapi crash HP pelapor di Android 15 belum dikonfirmasi selesai.
 
-## Fitur
+## Fitur dan pembaruan v1.6.0
 
-- Cari aplikasi terpasang dan atur sumber, URL webhook, serta token per aplikasi.
-- Pantau melalui akses notifikasi Android, tanpa login ke dompet.
-- Antrean persisten terenkripsi dengan Android Keystore dan retry terbatas. Perubahan tujuan/token menahan antrean lama, bukan mengalihkannya.
-- Riwayat membedakan `credited`, `duplicate`, `ignored`, `unmatched`, `ambiguous`, dan `review`.
-- Panduan izin, baterai, autostart, versi, dan pembaruan.
+- Pilih aplikasi sumber, URL webhook, dan token per aplikasi, tanpa login ke dompet.
+- Antrean persisten terenkripsi dengan Android Keystore dan retry terbatas. Perubahan URL/token menahan antrean lama, bukan mengalihkannya.
+- Riwayat membedakan `credited`, `duplicate`, `ignored`, `unmatched`, `ambiguous`, dan `review`. Jejak terenkripsi mencatat skip, HTTP, dan retry tanpa token atau respons mentah.
+- Empat halaman native bergaya macOS yang lebih ringkas, tarik untuk memuat ulang, skeleton saat memuat, pilihan khusus, dan ikon package sumber di Riwayat.
+- Cek rilis GitHub setiap aplikasi dibuka atau kembali ke depan. Cek otomatis diam jika tidak ada versi baru atau jaringan gagal. Popup hanya untuk rilis lebih baru yang diizinkan. Bawaan hanya rilis stabil, rilis uji bisa diaktifkan di Pengaturan.
+- Unduhan dimulai atas pilihan pengguna, lalu Android meminta konfirmasi pemasangan. APK disimpan privat dan dibagikan lewat FileProvider khusus pembaruan. SHA-256, package, versi, dan signature diperiksa sebelum pemasangan.
 
-## Penyiapan client
+## Penyiapan
 
-1. Unduh APK resmi dan izinkan pemasangan dari sumber tersebut jika diminta Android.
-2. Baca penjelasan privasi. Untuk aplikasi sideload, Android tertentu meminta **Allow restricted settings / Izinkan setelan terbatas** di info aplikasi sebelum akses notifikasi bisa diaktifkan. Nama menu berbeda tiap perangkat. Aplikasi tidak melewati pembatasan Android.
-3. Di website Panelin, aktifkan konfirmasi notifikasi pada metode pembayaran Manual yang mendukungnya. Salin URL callback dan token penerima.
-4. Di tab **Aplikasi**, pilih sumber pembayaran, lalu **Hubungkan aplikasi** atau **Kelola tujuan**. Isi URL HTTPS dan token, lalu berikan persetujuan. Format URL: `https://DOMAIN-ANDA/callback/notification/ID_METODE`, dengan ID numerik.
-5. Dari **Beranda**, buka pengaturan Android untuk memberi akses notifikasi. Izinkan notifikasi status, aktifkan penerusan, lalu tinjau baterai/autostart sesuai merek HP.
-6. Ikuti [checklist uji perangkat](TESTING.md) sebelum dipakai. Untuk pembayaran nyata yang disetujui client, cocokkan Riwayat dengan invoice, mutasi dompet, dan saldo website.
+1. Pasang APK resmi. Jika akses notifikasi terkunci, buka info aplikasi → **Allow restricted settings / Izinkan setelan terbatas**. Menu berbeda tiap HP, aplikasi tidak melewati pembatasan Android.
+2. Di metode pembayaran Manual website Panelin yang mendukung konfirmasi notifikasi, salin URL callback dan token penerima.
+3. Di **Aplikasi**, pilih sumber → **Hubungkan aplikasi** atau **Kelola tujuan**. Isi URL HTTPS dan token, periksa penerimanya, lalu setujui pengiriman. Format: `https://DOMAIN-ANDA/callback/notification/ID_METODE`, ID numerik.
+4. Di **Pengaturan**, izinkan akses notifikasi dan tinjau baterai/autostart. Aktifkan penerusan di **Beranda**.
+5. Ikuti [panduan uji](TESTING.md). Untuk pembayaran nyata yang disetujui client, cocokkan Riwayat, invoice, mutasi dompet, dan saldo website.
 
-**Jangan masukkan PIN, password, atau OTP DANA.** Gunakan token webhook dari metode pembayaran website, bukan kredensial dompet atau akun admin.
+Jangan masukkan PIN, password, atau OTP dompet. Gunakan token webhook website, bukan kredensial dompet/admin.
 
-## Kompatibilitas dan batas
+## Batas penggunaan
 
-Preset backend yang diperiksa adalah **DANA Bisnis**: package `id.dana`, judul `Pembayaran Masuk`, teks `Rp{nominal} diterima DANA Bisnis.`. Parser harus cocok dengan notifikasi asli. Memilih aplikasi lain tidak otomatis mendukung formatnya. DANA pribadi dan format lain perlu diuji terpisah.
+Preset backend yang diperiksa adalah DANA Bisnis: package `id.dana`, judul `Pembayaran Masuk`, teks `Rp{nominal} diterima DANA Bisnis.`. Parser harus cocok dengan notifikasi asli. Memilih aplikasi lain tidak menambah dukungan format. DANA pribadi perlu diuji terpisah.
 
-- **HTTP 200 bukan bukti kredit saldo.** Hanya `credited` berarti server mengonfirmasi kredit.
-- Status listener hanya menunjukkan keadaan HP, bukan kesehatan server atau keaslian dana masuk.
-- Notifikasi bukan API resmi bank/dompet. Jaga perangkat dan token. Perangkat terkompromi dapat memalsukan klaim.
-- Backend dapat menahan nominal historis untuk review atau menganggap akun/package/judul/nominal berulang sebagai duplikat. Android tidak mengubah pengaman ini.
-- Doze, penghemat baterai, pembatasan OEM, dan force stop dapat menunda atau menghentikan pemrosesan. Tidak ada jaminan aktif tanpa gangguan selama 24 jam.
-- Tidak ada tombol pembayaran palsu untuk tes koneksi. Payload yang cocok bisa menambah saldo.
+- HTTP 200 bukan bukti kredit saldo. Hanya `credited` mengonfirmasi kredit dari server. Status listener hanya menunjukkan sambungan HP, bukan kesehatan server atau keaslian dana.
+- Notifikasi bukan API resmi bank/dompet. HP terkompromi bisa memalsukan klaim. Lindungi perangkat dan token.
+- Backend bisa menahan nominal historis untuk review atau menganggap akun/package/judul/nominal berulang sebagai duplikat. Android tidak mengubah pengaman ini.
+- Doze, baterai, pembatasan OEM, dan force stop bisa menunda atau menghentikan pemrosesan. Tidak ada jaminan aktif 24 jam.
+- Tidak ada tes pembayaran palsu. Payload yang cocok bisa menambah saldo.
 
 ## Privasi dan bantuan
 
-Baca [privasi](PRIVACY.md) dan [catatan pembaruan](CHANGELOG.md). Jika HP hilang, rotasi token di website dan amankan perangkat.
+Baca [privasi](PRIVACY.md) dan [catatan pembaruan](CHANGELOG.md). GitHub menerima IP dan metadata koneksi saat cek rilis, bukan token atau isi notifikasi. Jika HP hilang, rotasi token di website.
 
-Hubungi pengelola Panelin atau [buat issue](https://github.com/herusuandana/panelin-notifikasi/issues) dengan versi aplikasi, Android, merek/model, dan langkah reproduksi. **Issue GitHub bersifat publik. Jangan unggah token, isi notifikasi pembayaran, data pelanggan, database, atau kunci signing.**
+Hubungi pengelola Panelin atau [buat issue](https://github.com/herusuandana/panelin-notifikasi/issues) dengan versi, Android, merek/model, dan langkah reproduksi. Issue bersifat publik. Jangan unggah token, notifikasi pembayaran, data pelanggan, database, atau kunci signing.
 
-## Untuk pengembang
+## Pengembang
 
-UI Jetpack Compose dan layanan native Kotlin, tanpa JavaScript atau WebView. Gunakan JDK 17, SDK 35, Build Tools 35.0.0, dan Gradle Wrapper 8.11.1. Versi dependensi ditetapkan di file Gradle.
+Jetpack Compose dan Kotlin native, tanpa JavaScript/WebView. Gunakan JDK 17, SDK 35, Build Tools 35.0.0, dan Gradle Wrapper 8.11.1. Dependensi ditetapkan di Gradle.
 
 ```sh
 git clone https://github.com/herusuandana/panelin-notifikasi.git
 cd panelin-notifikasi
-# Atur JAVA_HOME ke JDK 17 dan ANDROID_HOME ke Android SDK lokal.
+# Atur JAVA_HOME ke JDK 17 dan ANDROID_HOME ke SDK lokal.
 ./gradlew testDebugUnitTest lintRelease assembleDebug
 python3 scripts/check-release.py
 ```
 
-`python3 scripts/build-release.py` menjalankan unit test, lint, build release, dan verifikasi signature. Skrip membuat identitas signing lokal sekali di `$HOME/.local/share/panelin-android-signing`, di luar repository. **Kunci lokal baru tidak dapat memperbarui APK resmi.** Pembaruan resmi harus memakai kunci resmi. Cadangkan kunci secara offline, jangan unggah ke GitHub.
+`python3 scripts/build-release.py` menjalankan unit test, lint, build release, dan verifikasi signature. Kunci lokal dibuat sekali di `$HOME/.local/share/panelin-android-signing`, di luar repo. Kunci baru tidak bisa memperbarui APK resmi. Gunakan kunci resmi yang sama, cadangkan offline, jangan unggah ke GitHub.
 
-Hasil build ada di `dist/`. `python3 scripts/package-source.py` membuat arsip source tanpa cache, data lokal, atau keystore. Panduan SDK dan emulator ada di [TESTING.md](TESTING.md).
+Build ada di `dist/`. `python3 scripts/package-source.py` mengarsipkan source tanpa cache, data lokal, atau keystore. Lihat [panduan SDK dan emulator](TESTING.md).
 
-### Kontrak webhook
+### Webhook
 
-`POST /callback/notification/{ID_METODE}` memakai JSON `sign`, `pkg`, `title`, `text`, `bigtext`. Token hanya dikirim dalam body HTTPS. Query, fragment, userinfo, dan redirect ditolak. Backend mencocokkan invoice dan menentukan kredit. Aplikasi hanya meneruskan kejadian.
+`POST /callback/notification/{ID_METODE}` memakai JSON `sign`, `pkg`, `title`, `text`, `bigtext`. Token hanya di body HTTPS. Query, fragment, userinfo, dan redirect ditolak. Backend mencocokkan invoice dan menentukan kredit, aplikasi hanya meneruskan kejadian.
 
-### Merilis pembaruan
+### Rilis
 
-Naikkan `versionCode` dan `versionName` di `app/build.gradle.kts`. Selaraskan `VERSION`, `CHANGELOG.md`, dan `app/src/main/assets/changelog.json`, lalu jalankan pemeriksaan dan QA. Gunakan sertifikat release yang sama dan unggah APK beserta checksum ke GitHub Releases. Pasang di atas versi lama. **Jangan uninstall jika masih ada antrean.**
+Naikkan `versionCode`/`versionName` di `app/build.gradle.kts`. Selaraskan `VERSION`, `CHANGELOG.md`, dan `app/src/main/assets/changelog.json`. Jalankan pemeriksaan dan QA, lalu unggah APK bersertifikat resmi beserta checksum ke GitHub Releases. Jangan uninstall jika masih ada antrean.

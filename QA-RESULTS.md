@@ -1,5 +1,16 @@
 # Hasil pengujian
 
+## v1.5.0 — prerelease uji terbatas (versionCode 7)
+
+- Release, debug, dan APK tes berhasil dibangun. Tujuh unit test lulus. Lint: 0 error, 27 warning.
+- Signature v2 valid, sertifikat pembaruan tetap sama. SHA-256 APK: `9440f925865b3c51589bbb18dd4b6e51a241fe9ba914763647bcc2b79000e41a`.
+- Guard desain, copy, kontrak komponen, metadata versi, dan diff lulus. Bukan bukti visual/runtime.
+- Navigasi empat tab APK signed v1.5.0/code 7 non-debuggable lulus di API 26. Screenshot Beranda terbaca tanpa overlap pada ukuran dasar.
+- API 26: 12 tes runtime lulus. Navigasi/pintasan dan scroll lulus di HP, compact/font 1.6, serta landscape. Komponen dan timeline lulus pada HP. Editor/consent lulus pada compact/font 1.6.
+- Matriks belum seluruhnya lulus: editor HP gagal ComposeNotIdleException, editor landscape terputus dengan exit 255. Kernel mengonfirmasi qemu dibunuh batas memori cgroup. Tablet belum diuji dan cleanup gagal. Penyebab timeout editor belum dipastikan.
+- Tablet, mode gelap runtime, Android 15, HP fisik, dan pembayaran nyata belum terverifikasi. Hasil versi sebelumnya bukan bukti kelulusan versi ini.
+- Tidak ada pengiriman uji ke webhook klien.
+
 ## v1.4.0 — prerelease uji terbatas (versionCode 6)
 
 - Tujuh unit test lulus. Lint: 0 error, 26 warning.

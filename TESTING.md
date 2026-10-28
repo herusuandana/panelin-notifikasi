@@ -49,6 +49,7 @@ python3 scripts/check-release.py
 python3 scripts/check-startup.py
 python3 scripts/check-ui-components.py
 python3 scripts/check-ui-copy.py
+python3 scripts/check-wallet-design.py
 ```
 
 `python3 scripts/build-release.py assembleDebug assembleDebugAndroidTest` menjalankan unit test, lint, build release, dan verifikasi signature. Ikuti [aturan signing](README.md), jangan ganti identitas resmi.

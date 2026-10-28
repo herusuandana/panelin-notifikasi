@@ -23,6 +23,14 @@ class EditorSecurityTest {
   ui.onNodeWithTag("app-search").assertIsDisplayed().performTextInput("id.panelin.fixture")
   ui.onNodeWithTag("page-content").performScrollToNode(hasText("Kelola tujuan"))
   ui.onNodeWithText("Kelola tujuan").performClick()
+  ui.waitUntil(30000) {
+   ui.onAllNodesWithTag("token").fetchSemanticsNodes().isNotEmpty() ||
+    ui.onAllNodesWithText("Persetujuan akses notifikasi").fetchSemanticsNodes().isNotEmpty()
+  }
+  if (ui.onAllNodesWithText("Persetujuan akses notifikasi").fetchSemanticsNodes().isNotEmpty()) {
+   ui.onNodeWithText("Saya mengerti").performScrollTo().performClick()
+  }
+  ui.waitUntil(30000) { ui.onAllNodesWithTag("token").fetchSemanticsNodes().isNotEmpty() }
   ui.onNodeWithTag("token").assert(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsProperties.Password))
   ui.onNodeWithTag("token").performClick() /* token must never become unmasked */
   ui.activityRule.scenario.onActivity { it.currentFocus?.clearFocus() }

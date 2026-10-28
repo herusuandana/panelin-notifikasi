@@ -28,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,15 +52,15 @@ import org.json.JSONArray
 import java.text.DateFormat
 import java.util.Date
 
-private val Blue: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF66A9FF) else Color(0xFF0066CC)
-private val Ink: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFF5F5F7) else Color(0xFF1D1D1F)
-private val Muted: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFAEAEB8) else Color(0xFF63636D)
-private val Canvas: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF111113) else Color(0xFFF2F2F7)
-private val Paper: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color.White
-private val Line: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF38383A) else Color(0xFFE5E5EA)
+private val Blue: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF73D9E0) else Color(0xFF006D7A)
+private val Ink: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFEDF5F7) else Color(0xFF18343D)
+private val Muted: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFACBFC6) else Color(0xFF566A73)
+private val Canvas: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF101A20) else Color(0xFFF1F5F6)
+private val Paper: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF1B2931) else Color.White
+private val Line: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF354750) else Color(0xFFE1E9EC)
 private val Green: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFF72D99C) else Color(0xFF237A43)
 private val Amber: Color @Composable get() = if (isSystemInDarkTheme()) Color(0xFFFFC06B) else Color(0xFF965400)
-private val Round = RoundedCornerShape(20.dp)
+private val Round = RoundedCornerShape(24.dp)
 private data class SourceApp(val pkg: String, val label: String, val icon: android.graphics.Bitmap? = null)
 
 class MainActivity : ComponentActivity() {
@@ -216,22 +217,50 @@ class MainActivity : ComponentActivity() {
                                 when(page) {
                                     0 -> {
                                         item { val ready=loaded && enabled && listener.first && listener.second && destinations.any { it.enabled }
-                                            PanelCard {
-                                                Badge(if(ready) "Aktif" else if(!loaded) "Memuat status" else "Perlu penyiapan",if(ready) Green else Muted)
-                                                Text(when { !loaded -> "Status belum tersedia"; !enabled -> "Penerusan dijeda"; !listener.first -> "Izinkan akses notifikasi"; !listener.second -> "Menghubungkan ke Android"; !ready -> "Pilih aplikasi pembayaran"; else -> "Siap menerima notifikasi" },color=Ink,fontSize=24.sp,lineHeight=30.sp,fontWeight=FontWeight.SemiBold)
-                                                Copy("${destinations.count { it.enabled }} aplikasi aktif dari ${destinations.size} terhubung")
-                                                ToggleRow("Penerusan notifikasi",enabled,loaded && !busy) { value ->
-                                                    if(value && !acknowledged) privacyGate { }
-                                                    else if(value && destinations.none { it.enabled }) { tab=2; notice="Hubungkan dan aktifkan satu aplikasi terlebih dahulu." }
-                                                    else mutate({ store.enabled=value; if(value) Forwarding.reconnect(applicationContext) })
+                                            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(Brush.linearGradient(listOf(Color(0xFF006975),Color(0xFF0753A0)))).testTag("payment-overview").padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
+                                                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
+                                                    Glyph(6,Color.White)
+                                                    Text(if(ready) "Aktif" else if(loadFailed) "Status belum tersedia" else if(!loaded) "Memuat status" else "Perlu penyiapan",color=Color.White,fontSize=13.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha=.18f)).padding(12.dp,8.dp))
                                                 }
-                                                Copy("Hasil pengiriman dan kredit saldo ada di Riwayat.")
+                                                Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                                                    Text("Diterima hari ini",color=Color.White,fontSize=14.sp)
+                                                    Text(snapshot?.todayCount?.toString()?:"—",color=Color.White,fontSize=56.sp,lineHeight=64.sp,fontWeight=FontWeight.Bold,letterSpacing=(-2).sp)
+                                                    Text("Notifikasi dari sumber pilihan",color=Color.White,fontSize=13.sp,lineHeight=19.sp)
+                                                }
+                                                HorizontalDivider(color=Color.White.copy(alpha=.22f))
+                                                Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                                                    Text(when { !loaded -> "Status belum tersedia"; !enabled -> "Penerusan dijeda"; !listener.first -> "Izinkan akses notifikasi"; !listener.second -> "Menghubungkan ke Android"; !ready -> "Pilih aplikasi pembayaran"; else -> "Siap menerima notifikasi" },color=Color.White,fontSize=19.sp,lineHeight=26.sp,fontWeight=FontWeight.SemiBold)
+                                                    Text(if(!loaded) "Ringkasan belum dapat dipastikan." else "${destinations.count { it.enabled }} aplikasi aktif dari ${destinations.size} terhubung",color=Color.White,fontSize=13.sp,lineHeight=20.sp)
+                                                    Text("Jumlah notifikasi, bukan saldo. Hasil pengiriman dan kredit saldo ada di Riwayat.",color=Color.White,fontSize=12.sp,lineHeight=18.sp)
+                                                }
                                             }
                                         }
+                                        item { PanelCard {
+                                            Section("Akses cepat")
+                                            val compact=config.screenWidthDp<360 || fontScale>1.4f
+                                            Column(Modifier.testTag("quick-actions"),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                                                listOf(0,1,2,3).chunked(if(compact) 2 else 4).forEach { group ->
+                                                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                                                        group.forEach { i ->
+                                                            Shortcut(listOf(2,1,6,3)[i],listOf("Kelola aplikasi","Lihat riwayat","Akses notifikasi","Atur perangkat")[i],Modifier.weight(1f)) {
+                                                                when(i) { 0->tab=2; 1->tab=1; 2->privacyGate { openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }; else->tab=3 }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } }
+                                        item { PanelCard {
+                                            ToggleRow("Penerusan notifikasi",enabled,loaded && !busy) { value ->
+                                                if(value && !acknowledged) privacyGate { }
+                                                else if(value && destinations.none { it.enabled }) { tab=2; notice="Hubungkan dan aktifkan satu aplikasi terlebih dahulu." }
+                                                else mutate({ store.enabled=value; if(value) Forwarding.reconnect(applicationContext) })
+                                            }
+                                        } }
                                         if(!acknowledged) item { PanelCard { Section("Sebelum memulai"); Copy("Izin Android mencakup semua notifikasi. Panelin hanya meneruskan sumber yang Anda pilih ke website Anda. Isinya bisa memuat data pribadi."); Action("Baca privasi",false) { info="Privasi" to HelpText.Privacy }; Action("Saya mengerti") { acceptPrivacy() } } }
-                                        item { val compact=LocalConfiguration.current.screenWidthDp<360 || LocalDensity.current.fontScale>1.4f
-                                            if(compact) Column(verticalArrangement=Arrangement.spacedBy(12.dp)) { Metric("Diterima hari ini",snapshot?.todayCount); Metric("Kredit tercatat",snapshot?.creditedCount) }
-                                            else Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) { Box(Modifier.weight(1f)) { Metric("Diterima hari ini",snapshot?.todayCount) }; Box(Modifier.weight(1f)) { Metric("Kredit tercatat",snapshot?.creditedCount) } }
+                                        item { val compact=config.screenWidthDp<360 || fontScale>1.4f
+                                            if(compact) Column(verticalArrangement=Arrangement.spacedBy(12.dp)) { Metric("Dalam antrean",snapshot?.queuedCount); Metric("Kredit tercatat",snapshot?.creditedCount) }
+                                            else Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) { Box(Modifier.weight(1f)) { Metric("Dalam antrean",snapshot?.queuedCount) }; Box(Modifier.weight(1f)) { Metric("Kredit tercatat",snapshot?.creditedCount) } }
                                         }
                                         item { PanelCard { Section("Aktivitas perangkat"); KeyValue("Dalam antrean",snapshot?.queuedCount?.toString()?:"—"); KeyValue("Perlu perhatian",snapshot?.attentionCount?.toString()?:"—"); KeyValue("Terakhir diterima",time(snapshot?.lastReceivedAt?:0)); KeyValue("Terakhir dikirim",time(snapshot?.lastSentAt?:0)); Copy("Kredit tercatat dihitung dari riwayat tersimpan, bukan saldo website. Status Dikreditkan berarti website mengonfirmasi kredit saldo.") } }
                                         item { PanelCard { Section("Persiapan perangkat")
@@ -406,16 +435,25 @@ private fun Modifier.toggleableCompat(checked: Boolean,enabled: Boolean,role: Ro
     }
 }
 @Composable private fun Empty(title: String,description: String,icon: Int) { PanelCard { Column(Modifier.fillMaxWidth().padding(vertical=18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(16.dp)) { Box(Modifier.size(58.dp).clip(RoundedCornerShape(18.dp)).background(Blue.copy(alpha=.07f)),contentAlignment=Alignment.Center) { Glyph(icon,Blue) }; Section(title); Text(description,color=Muted,fontSize=13.sp,lineHeight=21.sp,textAlign=androidx.compose.ui.text.style.TextAlign.Center) } } }
+@Composable private fun Shortcut(icon: Int,title: String,modifier: Modifier,click: ()->Unit) {
+    val tint=when(icon) { 1->if(isSystemInDarkTheme()) Color(0xFFADBBFF) else Color(0xFF505CB2); 6->Green; 3->Amber; else->Blue }
+    Surface(onClick=click,color=Color.Transparent,shape=RoundedCornerShape(16.dp),modifier=modifier.heightIn(min=48.dp).semantics { role=Role.Button }) {
+        Column(Modifier.padding(vertical=8.dp,horizontal=2.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(tint.copy(alpha=.12f)),contentAlignment=Alignment.Center) { Glyph(icon,tint) }
+            Text(title,color=Ink,fontSize=12.sp,lineHeight=17.sp,fontWeight=FontWeight.Medium,textAlign=androidx.compose.ui.text.style.TextAlign.Center)
+        }
+    }
+}
 @Composable private fun NavItem(index: Int,title: String,selected: Boolean,modifier: Modifier,horizontal: Boolean=false,click: ()->Unit) {
-    val bg by animateColorAsState(if(selected) Blue.copy(alpha=.1f) else Color.Transparent,label="nav")
-    val style = modifier.clip(RoundedCornerShape(12.dp)).background(bg).selectableCompat(selected,click).heightIn(min=48.dp).padding(8.dp,8.dp)
+    val bg by animateColorAsState(if(selected) Blue.copy(alpha=.14f) else Color.Transparent,label="nav")
+    val style = modifier.clip(RoundedCornerShape(16.dp)).background(if(horizontal) bg else Color.Transparent).selectableCompat(selected,click).heightIn(min=48.dp).padding(8.dp,8.dp)
     val color = if(selected) Blue else Muted
     if(horizontal) Row(style,verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         Glyph(index,color)
         Text(title,color=color,fontSize=14.sp,fontWeight=if(selected) FontWeight.SemiBold else FontWeight.Normal,modifier=Modifier.weight(1f))
     } else Column(style,horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(4.dp)) {
-        Glyph(index,color)
-        Text(title,color=color,fontSize=11.sp,lineHeight=15.sp,fontWeight=if(selected) FontWeight.SemiBold else FontWeight.Normal,textAlign=androidx.compose.ui.text.style.TextAlign.Center)
+        Box(Modifier.width(56.dp).height(32.dp).clip(RoundedCornerShape(50)).background(bg),contentAlignment=Alignment.Center) { Glyph(index,color) }
+        Text(title,color=if(selected) Ink else Muted,fontSize=11.sp,lineHeight=15.sp,fontWeight=if(selected) FontWeight.SemiBold else FontWeight.Normal,textAlign=androidx.compose.ui.text.style.TextAlign.Center)
     }
 }
 private fun Modifier.selectableCompat(selected: Boolean,click: ()->Unit) = this.then(Modifier.selectable(selected,role=Role.Tab,onClick=click))

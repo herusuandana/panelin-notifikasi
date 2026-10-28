@@ -4,17 +4,17 @@ Aplikasi Android untuk pemilik/admin website **Panelin**, bukan pelanggan yang m
 
 Setiap client memilih sumber, URL, dan token sendiri. Tidak ada endpoint bawaan, server perantara Panelin, iklan, atau telemetri terpusat.
 
-v1.4.0 tersedia sebagai prerelease untuk uji terbatas. Screenshot di bawah masih menampilkan v1.2.0, bukan preview versi terbaru.
+v1.5.0 tersedia sebagai prerelease untuk uji terbatas. Screenshot di bawah berasal dari APK signed v1.5.0.
 
 ## Unduh dan pasang
 
-**[Unduh APK v1.4.0 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.4.0)**
+**[Unduh APK v1.5.0 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.5.0)**
 
-Di **Assets**, pilih `panelin-notifikasi-1.4.0-release.apk`, bukan **Source code**. File `.sha256` tersedia untuk memeriksa integritas.
+Di **Assets**, pilih `panelin-notifikasi-1.5.0-release.apk`, bukan **Source code**. File `.sha256` tersedia untuk memeriksa integritas.
 
 - Minimum Android 8.0, package `id.panelin.notifikasi`, sertifikat release tetap, bukan debug key.
 - UI native bergaya macOS/iOS dan timeline aktivitas. Jejak terenkripsi mencatat skip lokal, percobaan webhook, HTTP, hasil terpilih, dan retry tanpa respons mentah atau token.
-- Belum siap produksi. Matriks responsif, navigasi APK signed v1.4.0, Android 15, HP fisik, dan pembayaran hingga kredit saldo belum terverifikasi lengkap. Lihat [hasil QA](QA-RESULTS.md).
+- Belum siap produksi. Navigasi APK signed lulus pada emulator API 26. Matriks responsif, Android 15, HP fisik, dan pembayaran hingga kredit saldo belum terverifikasi lengkap. Lihat [hasil QA](QA-RESULTS.md).
 - Versi lain tersedia di [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Aplikasi belum memiliki pembaruan otomatis.
 
 <p>

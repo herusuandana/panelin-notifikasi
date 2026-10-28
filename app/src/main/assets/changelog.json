@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.5.0",
+    "code": 7,
+    "date": "2026-10-28",
+    "changes": [
+      "Beranda biru–toska dengan ringkasan pemantauan dan pintasan perangkat.",
+      "Kartu membulat dan navigasi kapsul untuk tampilan yang lebih rapi.",
+      "Antrean, jejak webhook, enkripsi, dan persetujuan tetap dipertahankan."
+    ]
+  },
+  {
     "version": "1.4.0",
     "code": 6,
     "date": "2026-10-28",

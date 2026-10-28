@@ -2,6 +2,14 @@
 
 APK dan checksum: [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Versi mengikuti `versionName` dan `versionCode`. Catatan juga tersedia di Pengaturan → Catatan pembaruan.
 
+## 1.5.0 — 2026-10-28
+
+versionCode: 7 · Prerelease uji terbatas
+
+- Header biru–toska, ringkasan pemantauan, dan pintasan perangkat.
+- Kartu membulat, ikon berwarna, dan navigasi kapsul.
+- Antrean, filter pembayaran, enkripsi, dan jejak webhook tidak berubah.
+
 ## 1.4.0 — 2026-10-28
 
 versionCode: 6 · Prerelease uji terbatas, QA belum lengkap

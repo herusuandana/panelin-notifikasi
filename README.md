@@ -2,15 +2,15 @@
 
 Aplikasi Android untuk pemilik/admin website Panelin, bukan pelanggan yang deposit. Aplikasi meneruskan notifikasi pembayaran dari HP ke webhook website. Setiap client memilih sumber, URL, dan token sendiri, tanpa server perantara, iklan, atau telemetri Panelin.
 
-v1.6.0 (versionCode 8, 2026-10-28) adalah prerelease uji terbatas. QA runtime belum lengkap. Screenshot di bawah berasal dari APK signed v1.6.0.
+v1.6.1 (versionCode 9, 2026-10-29) dirilis sebagai rilis normal. Cakupan QA perangkat masih terbatas, lihat [hasil QA](QA-RESULTS.md). Screenshot di bawah berasal dari APK signed v1.6.0.
 
 ## Unduh dan pasang
 
-**[Unduh APK v1.6.0 — uji terbatas](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.6.0)**
+**[Unduh APK v1.6.1](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.6.1)**
 
-Di **Assets**, pilih `panelin-notifikasi-1.6.0-release.apk`, bukan **Source code**. Periksa file `.sha256`. Minimum Android 8.0, package `id.panelin.notifikasi`, sertifikat release tetap.
+Di **Assets**, pilih `panelin-notifikasi-1.6.1-release.apk`, bukan **Source code**. Periksa file `.sha256`. Minimum Android 8.0, package `id.panelin.notifikasi`, sertifikat release tetap.
 
-Belum siap produksi. Navigasi empat tab APK signed v1.6.0 lulus di API 26. Tes updater lulus setelah rerun, tetapi tes UI/editor belum seluruhnya lulus. Pemasangan update, Android 15, HP fisik, dan pembayaran hingga kredit saldo belum terverifikasi. Lihat [hasil QA](QA-RESULTS.md) dan [rilis lain](https://github.com/herusuandana/panelin-notifikasi/releases).
+Label rilis normal bukan bukti semua perangkat sudah diuji. Navigasi dan tes updater yang tercatat sebelumnya berasal dari v1.6.0, bukan v1.6.1. Pengujian gesture refresh versi baru, pemasangan update nyata, Android 15, HP fisik, dan pembayaran hingga kredit saldo belum terverifikasi. Lihat [hasil QA](QA-RESULTS.md).
 
 Screenshot v1.6.0:
 
@@ -21,12 +21,12 @@ Screenshot v1.6.0:
 
 Pasang pembaruan tanpa uninstall agar konfigurasi dan antrean tersimpan. Package dan sertifikat harus sama. v1.0.1 memperbaiki urutan startup, tetapi crash HP pelapor di Android 15 belum dikonfirmasi selesai.
 
-## Fitur dan pembaruan v1.6.0
+## Fitur
 
 - Pilih aplikasi sumber, URL webhook, dan token per aplikasi, tanpa login ke dompet.
 - Antrean persisten terenkripsi dengan Android Keystore dan retry terbatas. Perubahan URL/token menahan antrean lama, bukan mengalihkannya.
 - Riwayat membedakan `credited`, `duplicate`, `ignored`, `unmatched`, `ambiguous`, dan `review`. Jejak terenkripsi mencatat skip, HTTP, dan retry tanpa token atau respons mentah.
-- Empat halaman native bergaya macOS yang lebih ringkas, tarik untuk memuat ulang, skeleton saat memuat, pilihan khusus, dan ikon package sumber di Riwayat.
+- Empat halaman native ringkas, pilihan khusus, dan ikon package sumber di Riwayat. Tarik ke bawah membaca ulang data lokal dan status izin, bukan saldo website atau mengirim ulang webhook. Skeleton beranimasi hanya selama pemuatan awal atau refresh manual.
 - Cek rilis GitHub setiap aplikasi dibuka atau kembali ke depan. Cek otomatis diam jika tidak ada versi baru atau jaringan gagal. Popup hanya untuk rilis lebih baru yang diizinkan. Bawaan hanya rilis stabil, rilis uji bisa diaktifkan di Pengaturan.
 - Unduhan dimulai atas pilihan pengguna, lalu Android meminta konfirmasi pemasangan. APK disimpan privat dan dibagikan lewat FileProvider khusus pembaruan. SHA-256, package, versi, dan signature diperiksa sebelum pemasangan.
 

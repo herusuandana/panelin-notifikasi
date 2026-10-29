@@ -14,7 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
@@ -29,6 +29,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.platform.LocalContext
@@ -71,6 +72,7 @@ private data class PackageIcon(val bitmap: Bitmap?)
 // ponytail: bounded process cache, refreshed after process restart if a package icon changes.
 private val iconCache = LruCache<String, PackageIcon>(80)
 internal val RefreshGeneration = SemanticsPropertyKey<Int>("RefreshGeneration")
+internal val RefreshDistance = SemanticsPropertyKey<Float>("RefreshDistance")
 
 class MainActivity : ComponentActivity() {
     private lateinit var store: AppStore
@@ -150,17 +152,15 @@ class MainActivity : ComponentActivity() {
         postAllowed = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         batteryFree = (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
     }
-    private fun refresh(page: Int) {
-        if(refreshing) return
-        refreshing = true
-        lifecycleScope.launch {
-            try {
-                while(reading || busy) delay(50)
-                reload()
-                if(page==2) loadApps()
-                refreshCount++
-            } finally { refreshing = false }
-        }
+    private suspend fun refresh(page: Int) {
+        try {
+            // Commit the loading frame before even an instant local read can finish.
+            withFrameNanos { }
+            while(reading || busy) delay(50)
+            reload()
+            if(page==2) loadApps()
+            refreshCount++
+        } finally { refreshing = false }
     }
     private fun mutate(action: () -> Unit, after: () -> Unit = {}) {
         if (busy) return
@@ -203,6 +203,7 @@ class MainActivity : ComponentActivity() {
         val labels = listOf("Beranda","Riwayat","Aplikasi","Pengaturan")
         val titles = listOf("Notifikasi pembayaran","Riwayat pengiriman","Aplikasi terhubung","Pengaturan aplikasi")
 
+        LaunchedEffect(refreshing) { if(refreshing) refresh(tab) }
         val config = LocalConfiguration.current
         val fontScale = LocalDensity.current.fontScale
         val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
@@ -241,13 +242,14 @@ class MainActivity : ComponentActivity() {
                     if(busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp).testTag("busy-progress"),color=Blue,trackColor=Line)
                     AnimatedContent(targetState=tab,transitionSpec={ fadeIn() togetherWith fadeOut() },label="page",modifier=Modifier.weight(1f)) { page ->
                         val pullState = rememberPullToRefreshState()
-                        PullToRefreshBox(isRefreshing=refreshing,onRefresh={ refresh(page) },state=pullState,modifier=Modifier.fillMaxSize().testTag("refresh-$page").semantics { this[RefreshGeneration]=refreshCount },contentAlignment=Alignment.TopCenter) {
+                        PullToRefreshBox(isRefreshing=refreshing,onRefresh={ refreshing=true },state=pullState,modifier=Modifier.fillMaxSize().testTag("refresh-$page").semantics { this[RefreshGeneration]=refreshCount; this[RefreshDistance]=pullState.distanceFraction },contentAlignment=Alignment.TopCenter,
+                            indicator={ PullToRefreshDefaults.Indicator(state=pullState,isRefreshing=refreshing,modifier=Modifier.align(Alignment.TopCenter).testTag("refresh-indicator-$page")) }) {
                             LazyColumn(Modifier.widthIn(max=760.dp).fillMaxSize().imePadding().testTag("page-content"),contentPadding=PaddingValues(horizontal=16.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                                 item { Text(titles[page],fontSize=22.sp,lineHeight=28.sp,fontWeight=FontWeight.SemiBold,color=Ink,modifier=Modifier.semantics { heading() }) }
-                                if(initialLoading) item { InitialSkeleton() }
-                                if(page==2 && appsLoading && !initialLoading) item { InitialSkeleton() }
+                                if(initialLoading || refreshing) item { InitialSkeleton() }
+                                if(page==2 && appsLoading && !initialLoading && !refreshing) item { InitialSkeleton() }
                                 if(loadFailed) item { PanelCard { Badge("Penyimpanan belum terbaca",Amber); Copy("Status belum dapat dipastikan. Data tidak dihapus."); Action("Coba lagi") { lifecycleScope.launch { reload() } } } }
-                                if(!initialLoading) when(page) {
+                                if(!initialLoading && !refreshing) when(page) {
                                     0 -> {
                                         item { Column(Modifier.testTag("payment-overview")) { PanelCard {
                                             val ready=loaded && enabled && listener.first && listener.second && destinations.any { it.enabled }
@@ -468,9 +470,12 @@ private fun Modifier.toggleableCompat(checked: Boolean,enabled: Boolean,role: Ro
     }
 }
 @Composable private fun InitialSkeleton() {
+    val pulse by rememberInfiniteTransition(label="skeleton").animateFloat(
+        initialValue=.35f,targetValue=.85f,
+        animationSpec=infiniteRepeatable(tween(650),RepeatMode.Reverse),label="skeleton-pulse")
     PanelCard {
         Column(Modifier.fillMaxWidth().testTag("initial-skeleton").semantics { contentDescription="Memuat data lokal" },verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            for(width in listOf(.5f,1f,.75f)) Box(Modifier.fillMaxWidth(width).height(14.dp).background(Line,RoundedCornerShape(4.dp)))
+            for(width in listOf(.5f,1f,.75f)) Box(Modifier.fillMaxWidth(width).height(14.dp).background(Muted.copy(alpha=pulse),RoundedCornerShape(4.dp)))
         }
     }
 }

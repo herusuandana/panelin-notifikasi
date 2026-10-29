@@ -6,7 +6,7 @@ import re
 root = Path(__file__).resolve().parents[1]
 ui = (root / 'app/src/main/java/id/panelin/notifikasi/MainActivity.kt').read_text()
 for feature in ['PullToRefreshBox(', 'rememberPullToRefreshState()', 'isRefreshing=refreshing',
-                'InitialSkeleton()', 'if(initialLoading)', 'LinearProgressIndicator(',
+                'InitialSkeleton()', 'if(initialLoading || refreshing)', 'LinearProgressIndicator(',
                 'Role.RadioButton', 'selectableGroup()', 'getApplicationIcon(pkg)',
                 'Dispatchers.IO', 'iconCache', 'internal fun AppIcon(',
                 'testTag("payment-overview")', 'testTag("quick-actions")',

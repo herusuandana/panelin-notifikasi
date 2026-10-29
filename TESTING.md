@@ -33,7 +33,7 @@ Catat lulus/gagal/belum diuji, versi aplikasi/Android, merek/model, package sumb
 | Validasi APK | Periksa SHA-256/package/versi/signature. Tolak APK rusak, debug, beda package/sertifikat, atau downgrade |
 | Update gagal | Tanpa rilis baru atau jaringan/HTTP gagal, cek otomatis tetap diam |
 | File update | APK privat, FileProvider hanya membagikan direktori pembaruan ke installer |
-| Refresh/pilihan | Tarik untuk memuat ulang di empat tab, skeleton selesai, pilihan khusus bekerja, tanpa aksi ganda |
+| Refresh/pilihan | Tarik tiga kali di tiap tab. Data lokal dibaca ulang, indikator kembali ke atas, skeleton beranimasi hanya saat memuat, tanpa pengiriman ulang webhook |
 | Ikon | Riwayat memakai ikon package sumber. Jika package hilang, pakai fallback aplikasi, bukan jam |
 | Privasi | Token/payload tidak masuk log, source, backup, atau screenshot yang dibagikan. Cek GitHub tidak membawa data pembayaran |
 
@@ -54,6 +54,8 @@ python3 scripts/check-startup.py
 python3 scripts/check-ui-components.py
 python3 scripts/check-ui-copy.py
 python3 scripts/check-compact-design.py
+python3 scripts/check-refresh.py
+python3 scripts/check-refresh-flow.py
 python3 scripts/check-update-manifest.py
 python3 scripts/check-updates.py
 ```
@@ -81,7 +83,8 @@ Log per kelas/screenshot ada di `dist/qa/`, tidak di-commit. Tanpa KVM, emulator
 
 | Pemeriksaan | Cakupan dan batas |
 | --- | --- |
-| `CompactUiTest` | Ringkasan, gesture refresh empat tab, pilihan filter, ikon package tanpa launcher |
+| `CompactUiTest` | Ringkasan, tiga gesture refresh per tab dan offset indikator kembali nol, pilihan filter, ikon package tanpa launcher |
+| `check-refresh-flow.py` | Coroutine refresh nyata dengan frame/pembaca fixture: 12 penyelesaian, daftar aplikasi, error, cancellation. Bukan gesture atau render Android |
 | `UpdateSecurityTest` | Controller nyata dengan HTTPS fixture lokal: foreground, kanal, popup, pembatalan installer, penolakan arsip. Jalankan kelas sendiri karena handler URL bersifat process-global. Bukan bukti instalasi APK baru berhasil |
 | `check-updates.py` | 10 tes kebijakan updater offline, bukan runtime Android |
 | `ComponentTest` | Checked state Compose, checkbox nonaktif tidak menerima persetujuan |

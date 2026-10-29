@@ -2,6 +2,14 @@
 
 APK dan checksum: [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Catatan juga ada di Pengaturan → Catatan pembaruan.
 
+## 1.6.1 — 2026-10-29
+
+versionCode: 9 · Rilis normal
+
+- Memperbaiki siklus swipe refresh agar status memuat diterapkan sebelum pembacaan data selesai.
+- Skeleton beranimasi saat pemuatan awal dan refresh manual. Refresh membaca ulang data lokal, bukan mengirim ulang pembayaran.
+- Batas pengujian perangkat tetap dicatat di [hasil QA](QA-RESULTS.md).
+
 ## 1.6.0 — 2026-10-28
 
 versionCode: 8 · Prerelease uji terbatas, QA runtime belum lengkap

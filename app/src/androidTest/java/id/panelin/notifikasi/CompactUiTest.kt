@@ -57,14 +57,17 @@ class CompactUiTest {
         for((page,label) in listOf("Beranda","Riwayat","Aplikasi","Pengaturan").withIndex()) {
             tab(label)
             val refresh=ui.onNodeWithTag("refresh-$page")
-            val before=refresh.fetchSemanticsNode().config[RefreshGeneration]
-            ui.onNodeWithTag("page-content").performTouchInput {
-                swipe(Offset(center.x,40f),Offset(center.x,height*.9f),700)
+            repeat(3) {
+                val before=refresh.fetchSemanticsNode().config[RefreshGeneration]
+                ui.onNodeWithTag("page-content").performTouchInput {
+                    swipe(Offset(center.x,40f),Offset(center.x,height*.9f),700)
+                }
+                ui.waitUntil(30_000) {
+                    val state=ui.onNodeWithTag("refresh-$page").fetchSemanticsNode().config
+                    state[RefreshGeneration] == before+1 && state[RefreshDistance] == 0f
+                }
+                ui.onNodeWithTag("initial-skeleton").assertDoesNotExist()
             }
-            ui.waitUntil(30_000) {
-                ui.onNodeWithTag("refresh-$page").fetchSemanticsNode().config[RefreshGeneration] != before
-            }
-            ui.onNodeWithTag("initial-skeleton").assertDoesNotExist()
         }
     }
 

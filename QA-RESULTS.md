@@ -1,5 +1,15 @@
 # Hasil pengujian
 
+## v1.6.1 — rilis normal (versionCode 9)
+
+- Memperbaiki balapan status refresh cepat: pekerjaan dimulai dari `LaunchedEffect` setelah komposisi memuat diterapkan, lalu menunggu frame sebelum membaca data. Tidak ada penundaan visual buatan.
+- Skeleton berdenyut hanya saat pemuatan awal atau refresh manual. Refresh membaca data lokal/status izin, bukan saldo website dan bukan replay webhook.
+- Guard source refresh gagal sebelum patch, lalu lulus. Pemeriksaan coroutine nyata dengan frame/pembaca fixture lulus: 12 penyelesaian, daftar aplikasi, error, dan cancellation. Ini bukan bukti gesture/render Android.
+- Tes gesture diperkuat menjadi tiga tarikan di tiap tab, memeriksa kenaikan generasi tepat satu dan offset indikator kembali nol. Tes perangkat belum dijalankan: ADB tidak memiliki perangkat, host tanpa KVM, percobaan emulator sebelumnya gagal menyiapkan layanan Android.
+- Release/debug/APK tes berhasil dibangun. Unit test: 17 lulus, tanpa gagal atau skip. Lint release: 0 error, 25 warning. Source sebelum/sesudah build cocok.
+- APK release non-debuggable, signature v2 valid dengan sertifikat resmi yang sama. SHA-256: `3acee595bc90017abf0b2a08b10b103a15fea6e1df9de873298486e288742e32`.
+- Dipublikasikan sebagai rilis normal sesuai permintaan pemilik. Label tersebut tidak menghapus batas QA: gesture/skeleton di HP, UI/editor, API 35, matrix responsif, installer nyata, dan pembayaran hingga kredit belum terverifikasi. Screenshot tetap berlabel v1.6.0. Tidak ada request uji ke webhook client, filter pembayaran tidak berubah.
+
 ## v1.6.0 — prerelease uji terbatas (versionCode 8)
 
 - Release/debug/APK tes berhasil dibangun. 17 unit test lulus. Lint: 0 error, 25 warning. QA runtime belum lengkap.

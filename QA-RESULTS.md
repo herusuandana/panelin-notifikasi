@@ -1,5 +1,15 @@
 # Hasil pengujian
 
+## v1.7.0 — rilis normal (versionCode 10)
+
+- APK menyerahkan format pembayaran ke website. Perlindungan pesan sensitif, sumber terpilih, antrean terenkripsi, dan deduplikasi tetap. Tujuan lama menunggu persetujuan ulang, bukan dihapus.
+- Tujuh tes kebijakan forwarding/hasil dan 10 tes kebijakan updater lulus offline. Pemeriksaan coroutine refresh dan guard source lulus. Seluruh 18 unit test Gradle lulus tanpa gagal/skip.
+- Build pertama terhenti SIGTERM sebelum verifikasi release. APK debug dan APK instrumentation sudah dikompilasi, bukan bukti runtime. Build kedua berhasil: release/debug/APK instrumentation selesai, source snapshot cocok, lint 0 error/25 warning. APK non-debuggable dengan signature v2 dan sertifikat resmi. SHA-256: `84f10431bd86fd2649d4a98e182ac0291797ec478c24e683a380ab1df21d5f3f`.
+- Endpoint `/check` website pusat lulus 17 tes fitur pembayaran (263 assertion), termasuk autentikasi dan tidak ada perubahan saldo/deposit/log meski payload cocok. Tidak ada pengiriman uji ke client produksi.
+- Fixture Android ditambahkan untuk request koneksi dan persetujuan ulang. Belum dijalankan: tidak ada perangkat ADB dan emulator software sebelumnya terhalang ANR sistem. Build/kompilasi bukan bukti runtime, TLS nyata, atau pembayaran hingga kredit.
+- Pengguna melaporkan refresh dan updater v1.6.1 normal pada HP-nya. Ini bukan pengujian fitur v1.7.0 atau semua perangkat.
+- Suite backend pertama: 1559 lulus, satu gagal karena direktori temp Chrome tidak dapat diakses user `www`. Direktori writable yang terlalu panjang juga gagal membuat socket browser. Dengan `TMPDIR` pendek/writable, 10 tes invoice lulus tanpa perubahan kode PDF. Suite penuh kedua: 1559 lulus, satu gagal pada tes rata-rata katalog (5401 vs 5400 detik). Tes memakai beberapa `now()` tanpa waktu beku dan lulus saat dijalankan sendiri (3 assertion). Tidak ada perubahan kode/assertion katalog. Suite penuh belum seluruhnya hijau.
+
 ## v1.6.1 — rilis normal (versionCode 9)
 
 - Memperbaiki balapan status refresh cepat: pekerjaan dimulai dari `LaunchedEffect` setelah komposisi memuat diterapkan, lalu menunggu frame sebelum membaca data. Tidak ada penundaan visual buatan.

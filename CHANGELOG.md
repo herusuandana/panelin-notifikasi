@@ -2,6 +2,14 @@
 
 APK dan checksum: [GitHub Releases](https://github.com/herusuandana/panelin-notifikasi/releases). Catatan juga ada di Pengaturan → Catatan pembaruan.
 
+## 1.7.0 — 2026-10-29
+
+versionCode: 10 · Rilis normal
+
+- Format dan pencocokan pembayaran ditentukan website. Pesan sensitif yang dikenali tetap diblokir di HP.
+- Tes koneksi mengirim token ke endpoint khusus tanpa memproses pembayaran.
+- Setelah upgrade, aktifkan dan setujui kembali tiap tujuan. Konfigurasi dan antrean lama tetap tersimpan.
+
 ## 1.6.1 — 2026-10-29
 
 versionCode: 9 · Rilis normal

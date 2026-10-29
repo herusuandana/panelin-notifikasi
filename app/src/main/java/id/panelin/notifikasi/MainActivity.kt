@@ -347,30 +347,45 @@ class MainActivity : ComponentActivity() {
         var active by remember(app.pkg) { mutableStateOf(existing?.enabled?:true) }
         var consent by remember(app.pkg) { mutableStateOf(false) }
         var validation by remember(app.pkg) { mutableStateOf("") }
+        var checking by remember(app.pkg) { mutableStateOf(false) }
+        val checkScope = rememberCoroutineScope()
         fun valid(): Boolean {
             val error=UiRules.endpointError(endpoint.trim())?:UiRules.tokenError(token)
             validation=error?:"Format sesuai. Koneksi dan token belum diuji. Tidak ada data dikirim."
             return error==null
         }
-        Sheet(app.label,{if(!busy) { token="";editing=null }},canDismiss=!busy) {
+        Sheet(app.label,{if(!busy && !checking) { token="";editing=null }},canDismiss=!busy && !checking) {
             AppIcon(app.pkg,app.label)
             Copy(app.pkg)
-            Field(endpoint,{endpoint=it;validation=""},"URL webhook",keyboard=KeyboardType.Uri,tag="endpoint")
-            Field(token,{token=it;validation=""},"Token webhook",secret=true,tag="token")
-            Copy("Salin URL dan token dari metode pembayaran di website. Jangan gunakan PIN atau OTP dompet.")
-            ToggleRow("Aktifkan aplikasi ini",active,!busy) { active=it }
-            CheckRow("Saya berwenang memakai tujuan ini dan mengizinkan nama paket, judul, teks, serta teks panjang dikirim ke website tersebut.",consent,!busy) {consent=it}
+            Field(endpoint,{endpoint=it;validation=""},"URL webhook",keyboard=KeyboardType.Uri,tag="endpoint",enabled=!checking)
+            Field(token,{token=it;validation=""},"Token webhook",secret=true,tag="token",enabled=!checking)
+            Copy("Salin URL dan token dari metode pembayaran di website. Setelah upgrade, simpan dan setujui kembali setiap tujuan agar penerusan aktif.")
+            ToggleRow("Aktifkan aplikasi ini",active,!busy && !checking) { active=it }
+            CheckRow("Saya berwenang memakai tujuan ini dan mengizinkan nama paket, judul, teks, serta teks panjang dikirim ke website tersebut.",consent,!busy && !checking) {consent=it}
             Copy("Mengganti URL atau token menahan antrean lama. Jeda tidak menghapus antrean. Pengiriman yang sudah berjalan tidak bisa ditarik.")
             AnimatedVisibility(validation.isNotEmpty()) { Text(validation,color=Amber,fontSize=13.sp,modifier=Modifier.semantics { liveRegion=LiveRegionMode.Polite }) }
-            Action("Periksa format",false,enabled=!busy) { valid() }
-            Action(if(busy) "Menyimpan…" else "Simpan",enabled=!busy) {
+            Copy("Website menentukan pembayaran. Promo dan transaksi lain juga bisa terkirim. Pesan sensitif yang dikenali diblokir, tetapi perlindungannya tidak sempurna.")
+            Action(if(checking) "Memeriksa koneksi…" else "Tes koneksi",false,enabled=!busy && !checking) {
+                if(valid()) {
+                    if(!consent) validation="Setujui tujuan pengiriman sebelum menguji koneksi. Tes hanya mengirim token, tanpa notifikasi atau perubahan saldo."
+                    else {
+                        checking=true
+                        checkScope.launch {
+                            try { validation=withContext(Dispatchers.IO) { checkConnection(endpoint.trim(),token) } }
+                            finally { checking=false }
+                        }
+                    }
+                }
+            }
+            Action("Periksa format",false,enabled=!busy && !checking) { valid() }
+            Action(if(busy) "Menyimpan…" else "Simpan",enabled=!busy && !checking) {
                 if(valid()) {
                     if(!consent) validation="Setujui pengiriman data sebelum menyimpan."
                     else { val value=Destination(app.pkg,app.label,endpoint.trim(),token,active); mutate({store.saveDestination(value)}) { token="";editing=null;notice="Tujuan tersimpan." } }
                 }
             }
-            Action("Batal",false,enabled=!busy) { token="";editing=null }
-            if(existing!=null) Action("Hapus konfigurasi aplikasi",false,enabled=!busy) {
+            Action("Batal",false,enabled=!busy && !checking) { token="";editing=null }
+            if(existing!=null) Action("Hapus konfigurasi aplikasi",false,enabled=!busy && !checking) {
                 confirmation="Hapus tujuan ini? Notifikasi baru tidak diteruskan. Antrean lama ditahan. Pengiriman yang sudah berjalan tidak bisa ditarik." to {
                     mutate({store.removeDestination(app.pkg)}) { token="";editing=null }
                 }
@@ -440,8 +455,8 @@ private fun Modifier.toggleableCompat(checked: Boolean,enabled: Boolean,role: Ro
         Text(title,color=Ink,fontSize=13.sp,lineHeight=20.sp,modifier=Modifier.weight(1f))
     }
 }
-@Composable private fun Field(value: String,change: (String)->Unit,label: String,secret: Boolean=false,keyboard: KeyboardType=KeyboardType.Text,tag: String="") {
-    OutlinedTextField(value,onValueChange=change,label={Text(label,fontSize=14.sp)},textStyle=androidx.compose.ui.text.TextStyle(fontSize=16.sp,color=Ink),singleLine=true,shape=RoundedCornerShape(10.dp),visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None,keyboardOptions=KeyboardOptions(keyboardType=if(secret) KeyboardType.Password else keyboard,autoCorrectEnabled=false),modifier=Modifier.fillMaxWidth().testTag(tag),colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Line,focusedBorderColor=Blue,unfocusedContainerColor=Paper,focusedContainerColor=Paper,unfocusedTextColor=Ink,focusedTextColor=Ink,unfocusedLabelColor=Muted,focusedLabelColor=Blue))
+@Composable private fun Field(value: String,change: (String)->Unit,label: String,secret: Boolean=false,keyboard: KeyboardType=KeyboardType.Text,tag: String="",enabled: Boolean=true) {
+    OutlinedTextField(value,onValueChange=change,enabled=enabled,label={Text(label,fontSize=14.sp)},textStyle=androidx.compose.ui.text.TextStyle(fontSize=16.sp,color=Ink),singleLine=true,shape=RoundedCornerShape(10.dp),visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None,keyboardOptions=KeyboardOptions(keyboardType=if(secret) KeyboardType.Password else keyboard,autoCorrectEnabled=false),modifier=Modifier.fillMaxWidth().testTag(tag),colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Line,focusedBorderColor=Blue,unfocusedContainerColor=Paper,focusedContainerColor=Paper,unfocusedTextColor=Ink,focusedTextColor=Ink,unfocusedLabelColor=Muted,focusedLabelColor=Blue))
 }
 @Composable private fun SettingRow(icon: Int,title: String,detail: String,danger: Boolean=false,click: ()->Unit) {
     Surface(onClick=click,color=Color.Transparent,shape=RoundedCornerShape(10.dp),modifier=Modifier.heightIn(min=48.dp).semantics { role=Role.Button }) {

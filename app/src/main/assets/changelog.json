@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.7.0",
+    "code": 10,
+    "date": "2026-10-29",
+    "changes": [
+      "Website menentukan format pembayaran. Pesan sensitif yang dikenali tetap diblokir di HP.",
+      "Tes koneksi memeriksa token tanpa memproses pembayaran.",
+      "Setelah upgrade, aktifkan dan setujui kembali setiap tujuan. Antrean lama tetap tersimpan."
+    ]
+  },
+  {
     "version": "1.6.1",
     "code": 9,
     "date": "2026-10-29",

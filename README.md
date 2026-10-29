@@ -2,15 +2,15 @@
 
 Aplikasi Android untuk pemilik/admin website Panelin, bukan pelanggan yang deposit. Aplikasi meneruskan notifikasi pembayaran dari HP ke webhook website. Setiap client memilih sumber, URL, dan token sendiri, tanpa server perantara, iklan, atau telemetri Panelin.
 
-v1.6.1 (versionCode 9, 2026-10-29) dirilis sebagai rilis normal. Cakupan QA perangkat masih terbatas, lihat [hasil QA](QA-RESULTS.md). Screenshot di bawah berasal dari APK signed v1.6.0.
+v1.7.0 (versionCode 10, 2026-10-29) disiapkan sebagai rilis normal. Batas QA perangkat tetap berlaku. Cakupan QA perangkat masih terbatas, lihat [hasil QA](QA-RESULTS.md). Screenshot di bawah berasal dari APK signed v1.6.0.
 
 ## Unduh dan pasang
 
-**[Unduh APK v1.6.1](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.6.1)**
+**[Unduh APK v1.7.0](https://github.com/herusuandana/panelin-notifikasi/releases/tag/v1.7.0)**
 
-Di **Assets**, pilih `panelin-notifikasi-1.6.1-release.apk`, bukan **Source code**. Periksa file `.sha256`. Minimum Android 8.0, package `id.panelin.notifikasi`, sertifikat release tetap.
+Di **Assets**, pilih `panelin-notifikasi-1.7.0-release.apk`, bukan **Source code**. Periksa file `.sha256`. Minimum Android 8.0, package `id.panelin.notifikasi`, sertifikat release tetap.
 
-Label rilis normal bukan bukti semua perangkat sudah diuji. Navigasi dan tes updater yang tercatat sebelumnya berasal dari v1.6.0, bukan v1.6.1. Pengujian gesture refresh versi baru, pemasangan update nyata, Android 15, HP fisik, dan pembayaran hingga kredit saldo belum terverifikasi. Lihat [hasil QA](QA-RESULTS.md).
+Label rilis normal bukan bukti semua perangkat sudah diuji. Navigasi dan tes updater yang tercatat sebelumnya berasal dari v1.6.0, bukan v1.6.1. Pemilik melaporkan refresh dan updater v1.6.1 normal di HP-nya. Fitur v1.7.0, Android 15, matrix perangkat, serta pembayaran hingga kredit saldo belum terverifikasi di perangkat. Lihat [hasil QA](QA-RESULTS.md).
 
 Screenshot v1.6.0:
 
@@ -24,6 +24,8 @@ Pasang pembaruan tanpa uninstall agar konfigurasi dan antrean tersimpan. Package
 ## Fitur
 
 - Pilih aplikasi sumber, URL webhook, dan token per aplikasi, tanpa login ke dompet.
+- v1.7.0: format pembayaran ditentukan website. Promo dan transaksi lain bisa diteruskan, pesan sensitif yang dikenali tetap diblokir. Setelah upgrade, aktifkan dan setujui kembali setiap tujuan.
+- Tes koneksi mengirim token saja ke `/check`, tanpa notifikasi atau perubahan saldo. Tidak fallback ke callback pembayaran jika website belum mendukungnya.
 - Antrean persisten terenkripsi dengan Android Keystore dan retry terbatas. Perubahan URL/token menahan antrean lama, bukan mengalihkannya.
 - Riwayat membedakan `credited`, `duplicate`, `ignored`, `unmatched`, `ambiguous`, dan `review`. Jejak terenkripsi mencatat skip, HTTP, dan retry tanpa token atau respons mentah.
 - Empat halaman native ringkas, pilihan khusus, dan ikon package sumber di Riwayat. Tarik ke bawah membaca ulang data lokal dan status izin, bukan saldo website atau mengirim ulang webhook. Skeleton beranimasi hanya selama pemuatan awal atau refresh manual.
@@ -34,7 +36,7 @@ Pasang pembaruan tanpa uninstall agar konfigurasi dan antrean tersimpan. Package
 
 1. Pasang APK resmi. Jika akses notifikasi terkunci, buka info aplikasi → **Allow restricted settings / Izinkan setelan terbatas**. Menu berbeda tiap HP, aplikasi tidak melewati pembatasan Android.
 2. Di metode pembayaran Manual website Panelin yang mendukung konfirmasi notifikasi, salin URL callback dan token penerima.
-3. Di **Aplikasi**, pilih sumber → **Hubungkan aplikasi** atau **Kelola tujuan**. Isi URL HTTPS dan token, periksa penerimanya, lalu setujui pengiriman. Format: `https://DOMAIN-ANDA/callback/notification/ID_METODE`, ID numerik.
+3. Di **Aplikasi**, pilih sumber → **Hubungkan aplikasi** atau **Kelola tujuan**. Isi URL HTTPS dan token, periksa penerimanya, setujui pengiriman, lalu gunakan Tes koneksi sebelum menyimpan. Aktifkan kembali sakelar tujuan lama setelah upgrade. Format: `https://DOMAIN-ANDA/callback/notification/ID_METODE`, ID numerik.
 4. Di **Pengaturan**, izinkan akses notifikasi dan tinjau baterai/autostart. Aktifkan penerusan di **Beranda**.
 5. Ikuti [panduan uji](TESTING.md). Untuk pembayaran nyata yang disetujui client, cocokkan Riwayat, invoice, mutasi dompet, dan saldo website.
 

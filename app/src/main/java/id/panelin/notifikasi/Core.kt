@@ -4,20 +4,12 @@ import java.net.URI
 
 /** Pure policy: no Android or network side effects. */
 object Core {
-    private val sensitive = Regex("(?iu)\\b(gagal|dibatalkan|ditolak|failed|cancelled|canceled|rejected|otp|pin|password|passcode|verification|verifikasi|autentikasi|authentication|promo|promosi|diskon|cashback|voucher|login|log\\s*in)\\b|kode.{0,24}(rahasia|keamanan|masuk)|jangan\\s+bagikan|one[- ]time|transfer\\s+berhasil|pembayaran\\s+berhasil|berhasil\\s+(dikirim|transfer|membayar)|uang\\s+keluar")
-    private val incoming = Regex("(?iu)diterima|menerima|pembayaran\\s+masuk|transfer\\s+masuk|dana\\s+masuk|uang\\s+masuk|payment\\s+received|received\\s+(a\\s+)?payment|incoming\\s+(payment|transfer)|credited")
+    private val sensitive = Regex("(?iu)\\b(otp|pin|password|passcode|verification|verifikasi|autentikasi|authentication|login|log\\s*in)\\b|kode.{0,24}(rahasia|keamanan|masuk)|jangan\\s+bagikan|one[- ]time")
 
     fun skipReason(title: String, text: String, bigText: String): String? {
         if (title.isBlank() || title.length > 200 || text.length > 4000 || bigText.length > 4000) return "invalid"
-        val content = "$title\n$text\n$bigText"
-        if (sensitive.containsMatchIn(content)) {
-            return when {
-                Regex("(?iu)\\b(otp|pin|password|passcode|verification|verifikasi|autentikasi|authentication|login)\\b|kode|jangan\\s+bagikan|one[- ]time").containsMatchIn(content) -> "sensitive"
-                Regex("(?iu)\\b(promo|promosi|diskon|cashback|voucher)\\b").containsMatchIn(content) -> "promotion"
-                else -> "outgoing"
-            }
-        }
-        return if (incoming.containsMatchIn(content)) null else "not_payment"
+        // Payment matching belongs to the website. Only privacy and payload bounds stay local.
+        return if (sensitive.containsMatchIn("$title\n$text\n$bigText")) "sensitive" else null
     }
 
     fun shouldForward(title: String, text: String, bigText: String): Boolean = skipReason(title, text, bigText) == null
@@ -44,6 +36,15 @@ object Core {
             digest.update(bytes)
         }
         return digest.digest().joinToString("") { "%02x".format(it.toInt() and 255) }
+    }
+
+    fun connectionResult(code: Int, status: Boolean, outcome: String): String = when {
+        code in 200..299 && status && outcome == "connected" -> "Terhubung. Token diterima website. Tidak ada pembayaran diproses."
+        code == 401 -> "Token ditolak website. Salin token terbaru."
+        code == 404 -> "Tes koneksi belum tersedia atau metode tidak aktif. Periksa versi website dan pengaturannya."
+        code == 429 -> "Terlalu banyak pemeriksaan. Coba lagi nanti."
+        code in 200..299 -> "Respons tes koneksi tidak dikenali."
+        else -> "Website belum dapat diperiksa. Coba lagi nanti."
     }
 
     fun disposition(code: Int, status: Boolean, outcome: String): String = when {

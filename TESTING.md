@@ -24,7 +24,8 @@ Catat lulus/gagal/belum diuji, versi aplikasi/Android, merek/model, package sumb
 | Tujuan berubah | URL/token baru menahan antrean lama, bukan mengalihkannya |
 | Respons | 401/404/422 perlu perhatian. 5xx/429/jaringan dicoba ulang terbatas |
 | Kredit | ignored/unmatched/ambiguous/review/duplicate bukan kredit. HTTP 200 saja tidak cukup |
-| Filter | Promo, OTP, transaksi keluar/gagal tidak dianggap pembayaran masuk |
+| Filter | Format kustom/promo/transaksi keluar diteruskan untuk dinilai website. OTP/PIN yang dikenali diblokir. Konfigurasi lama menunggu persetujuan ulang |
+| Tes koneksi | Hanya token ke `/check`, tidak mengubah saldo, tidak fallback ke callback pembayaran |
 | Background | Uji layar mati, Doze, reboot, baterai/OEM, dan keterlambatan |
 | Listener | Cabut/aktifkan akses, periksa status dan pemulihan sambungan |
 | UI | Empat tab, daftar panjang, font besar, keyboard, rotasi, mode gelap, dan masking token |
@@ -49,6 +50,7 @@ Dari root repo dengan JDK 17 dan Android SDK 35:
 
 ```sh
 ./gradlew testDebugUnitTest lintRelease assembleDebug assembleDebugAndroidTest
+python3 scripts/check-forwarding-policy.py
 python3 scripts/check-release.py
 python3 scripts/check-startup.py
 python3 scripts/check-ui-components.py
@@ -94,7 +96,8 @@ Log per kelas/screenshot ada di `dist/qa/`, tidak di-commit. Tanpa KVM, emulator
 | `check-ui-components.py` | Guard Compose/inset/proteksi root/window, bukan visual/runtime |
 | `StartupTest` | Buka dashboard tanpa UI Automator/izin notifikasi. Ulangi di API 35 untuk system bar modern |
 | `check-startup.py` | Urutan source, bukan runtime |
-| `StoreSecurityTest` | SQLite/Keystore nyata dan penolakan URL tidak aman |
+| `ConnectionCheckTest` | Request HTTPS in-memory hanya membawa token, `/check` tanpa fallback, respons tidak dikenali/besar tidak membocorkan data. Jalankan di proses tersendiri |
+| `StoreSecurityTest` | SQLite/Keystore nyata, URL tidak aman ditolak, konfigurasi lama menunggu persetujuan ulang |
 | `QueueBehaviorTest` | Pending, jeda, hapus riwayat, perubahan kredensial. Bukan uji offline penuh |
 | `StatusNotificationTest` | Tidak mengaku tersambung tanpa akses listener |
 | `WorkerContractTest` | Worker/JSON/outcome/jejak HTTP, transport in-memory tanpa request eksternal |

@@ -1,18 +1,20 @@
 # Privasi Panelin Notifikasi
 
-Berlaku hingga versi 1.6.0. Diperbarui: 28 Oktober 2026.
+Berlaku untuk versi 1.7.0. Diperbarui: 29 Oktober 2026.
 
 Aplikasi ini untuk HP pemilik/admin website Panelin, bukan pelanggan yang deposit. Pemilik perangkat memilih sumber dan penerima data.
 
 ## Data dan pengiriman
 
-Izin notifikasi Android mencakup semua notifikasi. Aplikasi memeriksa package terpilih dan aktif sebelum membaca isinya, lalu menyaring pembayaran masuk di HP. Filter tidak mengenali semua format/data sensitif. Pilih hanya aplikasi yang diperlukan. Android juga bisa menutupi isi sensitif.
+Izin notifikasi Android mencakup semua notifikasi. Aplikasi memeriksa package terpilih dan aktif sebelum membaca isinya, lalu memblokir pesan sensitif yang dikenali. Format pembayaran diputuskan website, sehingga promo dan transaksi lain juga bisa diteruskan. Filter privasi tidak mengenali semua data sensitif. Konfigurasi lama dinonaktifkan sampai Anda menyetujui kembali tiap tujuan. Pilih hanya aplikasi yang diperlukan. Android juga bisa menutupi isi sensitif.
 
 Data meliputi package/nama aplikasi, judul, teks, teks panjang, identitas deduplikasi, waktu, URL, token, status, dan jumlah percobaan. Daftar aplikasi launcher hanya dipakai lokal untuk memilih sumber, bukan inventaris seluruh package sistem.
 
 Package, judul, teks, teks panjang, dan token dikirim langsung ke URL HTTPS pilihan Anda. Tidak ada endpoint/token bawaan, server pengumpul Panelin, analitik, iklan, atau penjualan data. Website mengatur penyimpanan, log, dan akses admin. Aplikasi tidak bisa menarik atau menghapus data yang sudah diterima website.
 
 Setiap dibuka atau kembali ke depan, aplikasi mengecek rilis resmi lewat GitHub. GitHub menerima IP dan metadata koneksi, bukan token, daftar sumber, atau isi notifikasi. Cek otomatis diam jika tidak ada rilis baru atau jaringan gagal. Bawaan hanya rilis stabil, rilis uji bersifat pilihan. Unduhan memerlukan pilihan Anda dan pemasangan memerlukan konfirmasi Android.
+
+Tes koneksi hanya dilakukan atas tindakan Anda dan persetujuan tujuan. Token dikirim ke `/check`, tanpa isi notifikasi, event pembayaran, atau perubahan saldo. Jika endpoint belum tersedia, aplikasi tidak mencoba callback pembayaran.
 
 ## Penyimpanan
 

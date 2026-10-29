@@ -327,8 +327,8 @@ class AppStore(context: Context) {
         }
     }
 
-    private fun destination(json: JSONObject) = Destination(json.getString("pkg"), json.getString("label"), json.getString("endpoint"), json.getString("sign"), json.getBoolean("enabled"))
-    private fun destinationJson(value: Destination) = JSONObject().put("pkg", value.packageName).put("label", value.label).put("endpoint", value.endpoint).put("sign", value.token).put("enabled", value.enabled)
+    private fun destination(json: JSONObject) = Destination(json.getString("pkg"), json.getString("label"), json.getString("endpoint"), json.getString("sign"), json.getBoolean("enabled") && json.optInt("relay_consent") == 2)
+    private fun destinationJson(value: Destination) = JSONObject().put("pkg", value.packageName).put("label", value.label).put("endpoint", value.endpoint).put("sign", value.token).put("enabled", value.enabled).put("relay_consent", 2)
     private fun route(packageName: String) = Core.eventIdentity(packageName)
     private fun payload(cursor: Cursor) = decrypt(cursor.getBlob(cursor.getColumnIndexOrThrow("payload")), "queue:${cursor.string("event")}")
     private fun Cursor.string(column: String) = getString(getColumnIndexOrThrow(column))
